@@ -1,0 +1,29 @@
+[tasks.check]
+command = "cargo"
+args = ["check"]
+
+[tasks.test]
+command = "cargo"
+args = ["test", "--verbose", "--", "--nocapture"]
+
+[tasks.fmt]
+command = "cargo"
+args = ["fmt", "--", "--check"]
+
+[tasks.deploy]
+command = "cargo"
+args = ["run", "--", "deploy"]
+
+[tasks.release-dry-run]
+command = "cargo"
+args = ["release", "patch", "--no-publish", "--no-sign", "--dry-run"]
+
+[tasks.release]
+command = "cargo"
+args = ["release", "patch", "--no-publish", "--no-sign", "--execute"]
+
+[tasks.ci]
+dependencies = ["check", "test", "fmt"]
+
+[tasks.cd]
+dependencies = ["release-dry-run"]

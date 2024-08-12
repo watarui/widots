@@ -1,0 +1,13 @@
+link:
+  - location: "~/w/widots/example"
+provision:
+  - mode: mac
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      killall Dock
+  - mode: linux
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      echo "hoge"

@@ -1,0 +1,44 @@
+[package]
+exclude = ["tests", "example", ".github", "completions"]
+name = "widots"
+version = "0.0.24"
+edition = "2021"
+license = "MIT"
+description = "A personal dotfile manager"
+repository = "https://github.com/watarui/widots"
+publish = false
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chrono = "0.4.38"
+clap = { version = "4.5.13", features = [
+  "color",
+  "error-context",
+  "help",
+  "suggestions",
+  "usage",
+  "cargo",
+  "derive",
+  "env",
+  "unicode",
+  "wrap_help",
+  "string",
+] }
+dirs = "5.0.1"
+fern = "0.6.2"
+inquire = "0.7.5"
+log = "0.4.22"
+serde = { version = "1.0.204", features = ["derive"] }
+serde_yaml = "0.9.34"
+tempfile = "3.11.0"
+thiserror = "1.0.63"
+uuid = { version = "1.10.0", features = ["v4"] }
+walkdir = "2.5.0"
+whoami = "1.5.1"
+
+[features]
+fish_installed = []
+homebrew_installed = []
+
+[dev-dependencies]
+mockall = "0.13.0"
