@@ -1,32 +1,57 @@
-use std::fs::File;
-use std::io::Read;
+use async_trait::async_trait;
 use std::path::Path;
-use std::sync::Arc;
+use tokio::fs::File;
+use tokio::io::AsyncReadExt;
 
 use crate::error::app_error::AppError;
 use crate::models::yaml::Yaml;
 
-pub trait YamlOperations {
-    fn validate_filename(&self, path: &Path) -> Result<(), AppError>;
-    fn parse(&self, path: &Path) -> Result<Yaml, AppError>;
+/// Provides operations for YAML file handling.
+#[async_trait]
+pub trait YamlOperations: Send + Sync {
+    /// Validates the filename of a YAML file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to the YAML file
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success or failure of the validation.
+    async fn validate_filename(&self, path: &Path) -> Result<(), AppError>;
+
+    /// Parses a YAML file into a serde_yaml::Value.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - The path to the YAML file
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the parsed YAML data,
+    /// or an `AppError` if parsing fails.
+    async fn parse(&self, path: &Path) -> Result<Yaml, AppError>;
 }
 
+/// Implements YAML file operations.
 pub struct YamlParser;
 
 impl Default for YamlParser {
     fn default() -> Self {
-        YamlParser
+        Self::new()
     }
 }
 
 impl YamlParser {
-    pub fn new() -> Arc<Self> {
-        Arc::new(YamlParser)
+    /// Creates a new `YamlParser` instance.
+    pub fn new() -> Self {
+        YamlParser
     }
 }
 
+#[async_trait]
 impl YamlOperations for YamlParser {
-    fn validate_filename(&self, path: &Path) -> Result<(), AppError> {
+    async fn validate_filename(&self, path: &Path) -> Result<(), AppError> {
         match path.extension() {
             Some(ext) if ext == "yaml" || ext == "yml" => Ok(()),
             _ => Err(AppError::InvalidInput(
@@ -35,27 +60,17 @@ impl YamlOperations for YamlParser {
         }
     }
 
-    fn parse(&self, path: &Path) -> Result<Yaml, AppError> {
+    async fn parse(&self, path: &Path) -> Result<Yaml, AppError> {
         if !path.exists() {
             return Err(AppError::FileNotFound(path.to_path_buf()));
         }
-        let mut file = File::open(path).map_err(|e| AppError::Io(Arc::new(e)))?;
+        let mut file = File::open(path).await.map_err(AppError::Io)?;
 
         let mut contents = String::new();
         file.read_to_string(&mut contents)
-            .map_err(|e| AppError::Io(Arc::new(e)))?;
+            .await
+            .map_err(AppError::Io)?;
 
         serde_yaml::from_str(&contents).map_err(|e| AppError::Yaml(e.to_string()))
     }
-}
-
-pub fn validate_filename(
-    yaml_parser: Arc<dyn YamlOperations>,
-    path: &Path,
-) -> Result<(), AppError> {
-    yaml_parser.validate_filename(path)
-}
-
-pub fn parse(yaml_parser: Arc<dyn YamlOperations>, path: &Path) -> Result<Yaml, AppError> {
-    yaml_parser.parse(path)
 }

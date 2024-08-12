@@ -1,98 +1,105 @@
 use clap::Parser;
-use log::LevelFilter::{Debug, Info, Trace};
-use std::process::exit;
+use log::LevelFilter;
 use widots::{
-    cli::{Args, BrewAction, Commands, FishAction, VSCodeExtensionAction},
+    cli::{
+        Args, BrewAction, BrewOperation, Commands, Dotfiles, FishAction, FishOperation,
+        MaterializeDestination, VSCodeExtensionAction, VSCodeExtensionOperation, Yaml,
+    },
     commands::{
-        brew::{Homebrew, HomebrewOperations},
-        deploy::{Deployable, Deployer},
-        fish::{Fish, FishOperations},
-        fisher::{Fisher, FisherOperations},
-        link::{make_symlinks, Linker},
-        materialize::{Materializable, Materializer},
-        run::{Runner, RunnerOperations},
-        vscode::{VSCode, VSCodeOperations},
+        brew::HomebrewOperations, deploy::Deployable, fish::FishOperations,
+        fisher::FisherOperations, materialize::Materializable, run::RunnerOperations,
+        vscode::VSCodeOperations,
     },
     config::app_config::AppConfig,
-    create_app_config,
     error::app_error::AppError,
     logger::log::setup_logger,
-    Result,
 };
 
-fn run(args: Args, config: &AppConfig) -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<(), AppError> {
+    let args = Args::parse();
+
+    let log_level = match args.verbose {
+        0 => LevelFilter::Info,
+        1 => LevelFilter::Debug, // -v
+        _ => LevelFilter::Trace, // -vv
+    };
+
+    setup_logger(log_level).map_err(|e| AppError::Logger(e.to_string()))?;
+
+    let config = AppConfig::new().await?;
+
     match args.command {
-        Commands::Link(dots) => {
-            let linker = Linker::new();
-            make_symlinks(linker, &dots.path, dots.force, dots.test)?;
-        }
-        Commands::Materialize(dest) => {
-            let materializer = Materializer::new(Linker::new());
-            materializer.execute(&dest.path)?;
-        }
-        Commands::Run(yaml) => {
-            let runner = Runner::new(
-                config.shell_executor.clone(),
-                config.yaml_parser.clone(),
-                Linker::new(),
-            );
-            runner.execute(&yaml.path, yaml.force)?;
-        }
-        Commands::Brew(op) => {
-            let homebrew = Homebrew::new(config.shell_executor.clone());
-            match op.action {
-                BrewAction::Install => homebrew.install()?,
-                BrewAction::Import => homebrew.import()?,
-                BrewAction::Export => homebrew.export()?,
-            }
-        }
-        Commands::Deploy => {
-            let deployer = Deployer::new(config.shell_executor.clone());
-            deployer.execute()?;
-        }
-        Commands::Fish(op) => {
-            let fish = Fish::new(config.shell_executor.clone());
-            match op.action {
-                FishAction::Install => fish.install()?,
-                FishAction::Default => fish.set_default()?,
-                FishAction::Fisher => {
-                    let fisher = Fisher::new(config.shell_executor.clone());
-                    fisher.install()?;
-                }
-            }
-        }
-        Commands::Vscode(op) => {
-            let vscode = VSCode::new(config.shell_executor.clone());
-            match op.action {
-                VSCodeExtensionAction::Import => vscode.import()?,
-                VSCodeExtensionAction::Export => vscode.export()?,
-                VSCodeExtensionAction::Code => vscode.ensure_code_command()?,
-            }
-        }
+        Commands::Link(dots) => link_command(&config, dots).await?,
+        Commands::Materialize(dest) => materialize_command(&config, dest).await?,
+        Commands::Run(yaml) => run_command(&config, yaml).await?,
+        Commands::Brew(op) => brew_command(&config, op).await?,
+        Commands::Deploy => deploy_command(&config).await?,
+        Commands::Fish(op) => fish_command(&config, op).await?,
+        Commands::Vscode(op) => vscode_command(&config, op).await?,
     }
 
     Ok(())
 }
 
-fn main() {
-    let args = Args::parse();
+async fn link_command(config: &AppConfig, dots: Dotfiles) -> Result<(), AppError> {
+    let linker = config.linker();
+    linker
+        .link_recursively(&dots.path, &dirs::home_dir().unwrap(), dots.force)
+        .await?;
+    Ok(())
+}
 
-    let log_level = match args.verbose {
-        0 => Info,  // default
-        1 => Debug, // -v
-        _ => Trace, // -vv
-    };
+async fn materialize_command(
+    config: &AppConfig,
+    dest: MaterializeDestination,
+) -> Result<(), AppError> {
+    let materializer = config.materializer();
+    materializer.execute(&dest.path).await?;
+    Ok(())
+}
 
-    let _ = setup_logger(log_level).map_err(|e| AppError::Logger(e.to_string()));
+async fn run_command(config: &AppConfig, yaml: Yaml) -> Result<(), AppError> {
+    let runner = config.runner();
+    runner.execute(&yaml.path, yaml.force).await?;
+    Ok(())
+}
 
-    let config = create_app_config();
+async fn brew_command(config: &AppConfig, op: BrewOperation) -> Result<(), AppError> {
+    let homebrew = config.homebrew();
+    match op.action {
+        BrewAction::Install => homebrew.install().await?,
+        BrewAction::Import => homebrew.import().await?,
+        BrewAction::Export => homebrew.export().await?,
+    }
+    Ok(())
+}
 
-    let result = run(args, &config);
-    match result {
-        Ok(_) => (),
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            exit(1);
+async fn deploy_command(config: &AppConfig) -> Result<(), AppError> {
+    let deployer = config.deployer();
+    deployer.execute().await?;
+    Ok(())
+}
+
+async fn fish_command(config: &AppConfig, op: FishOperation) -> Result<(), AppError> {
+    let fish = config.fish();
+    match op.action {
+        FishAction::Install => fish.install().await?,
+        FishAction::Default => fish.set_default().await?,
+        FishAction::Fisher => {
+            let fisher = config.fisher();
+            fisher.install().await?;
         }
     }
+    Ok(())
+}
+
+async fn vscode_command(config: &AppConfig, op: VSCodeExtensionOperation) -> Result<(), AppError> {
+    let vscode = config.vscode();
+    match op.action {
+        VSCodeExtensionAction::Import => vscode.import().await?,
+        VSCodeExtensionAction::Export => vscode.export().await?,
+        VSCodeExtensionAction::Code => vscode.ensure_code_command().await?,
+    }
+    Ok(())
 }

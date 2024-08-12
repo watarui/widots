@@ -1,18 +1,20 @@
+use async_trait::async_trait;
 use log::debug;
+use tokio::fs::{create_dir_all, File};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 use crate::config::constants::{APP_RESOURCE_DIR, VSCODE_EXTENSIONS_FILENAME};
 use crate::core::shell::ShellOperations;
 use crate::error::app_error::AppError;
 use crate::models::shell::Cmd;
-use std::fs::{create_dir_all, File};
-use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-pub trait VSCodeOperations {
-    fn export(&self) -> Result<(), AppError>;
-    fn import(&self) -> Result<(), AppError>;
-    fn ensure_code_command(&self) -> Result<(), AppError>;
+#[async_trait]
+pub trait VSCodeOperations: Send + Sync {
+    async fn export(&self) -> Result<(), AppError>;
+    async fn import(&self) -> Result<(), AppError>;
+    async fn ensure_code_command(&self) -> Result<(), AppError>;
 }
 
 pub struct VSCode {
@@ -24,15 +26,15 @@ impl VSCode {
         Self { shell }
     }
 
-    fn check_code_command(&self) -> Result<(), AppError> {
-        self.shell.which(Cmd::Cmd("code".into()))?;
+    async fn check_code_command(&self) -> Result<(), AppError> {
+        let cmd = Cmd::new("code");
+        self.shell.which(&cmd).await?;
         Ok(())
     }
 
-    fn list_extensions(&self) -> Result<Vec<u8>, AppError> {
-        let output = self
-            .shell
-            .shell(Cmd::Cmd("code --list-extensions".into()))?;
+    async fn list_extensions(&self) -> Result<Vec<u8>, AppError> {
+        let cmd = Cmd::new("code --list-extensions");
+        let output = self.shell.shell(&cmd).await?;
 
         debug!("code --list-extensions output: {:?}", output);
 
@@ -42,12 +44,11 @@ impl VSCode {
         Ok(output.stdout)
     }
 
-    fn save_extensions(&self, extensions: &[u8]) -> Result<(), AppError> {
+    async fn save_extensions(&self, extensions: &[u8]) -> Result<(), AppError> {
         let path = self.get_extensions_path();
-        create_dir_all(path.parent().unwrap()).map_err(|e| AppError::Io(Arc::new(e)))?;
-        let mut file = File::create(&path).map_err(|e| AppError::Io(Arc::new(e)))?;
-        file.write_all(extensions)
-            .map_err(|e| AppError::Io(Arc::new(e)))?;
+        create_dir_all(path.parent().unwrap()).await?;
+        let mut file = File::create(&path).await?;
+        file.write_all(extensions).await?;
         Ok(())
     }
 
@@ -55,18 +56,22 @@ impl VSCode {
         Path::new(APP_RESOURCE_DIR).join(VSCODE_EXTENSIONS_FILENAME)
     }
 
-    fn read_extensions(&self, path: &Path) -> Result<Vec<String>, AppError> {
-        let file = File::open(path).map_err(|e| AppError::Io(Arc::new(e)))?;
-        BufReader::new(file)
-            .lines()
-            .collect::<Result<_, _>>()
-            .map_err(|e| AppError::Io(Arc::new(e)))
+    async fn read_extensions(&self, path: &Path) -> Result<Vec<String>, AppError> {
+        let file = File::open(path).await?;
+        let reader = BufReader::new(file);
+        let mut extensions = Vec::new();
+        let mut lines = reader.lines();
+
+        while let Some(line) = lines.next_line().await? {
+            extensions.push(line);
+        }
+
+        Ok(extensions)
     }
 
-    fn install_extension(&self, extension: &str) -> Result<(), AppError> {
-        let output = self.shell.shell(Cmd::Cmd(
-            format!("code --install-extension --force {}", extension).into(),
-        ))?;
+    async fn install_extension(&self, extension: &str) -> Result<(), AppError> {
+        let cmd = Cmd::new(format!("code --install-extension --force {}", extension));
+        let output = self.shell.shell(&cmd).await?;
 
         debug!("code --install-extension --force output: {:?}", output);
 
@@ -80,24 +85,25 @@ impl VSCode {
     }
 }
 
+#[async_trait]
 impl VSCodeOperations for VSCode {
-    fn export(&self) -> Result<(), AppError> {
-        self.check_code_command()?;
-        let extensions = self.list_extensions()?;
-        self.save_extensions(&extensions)
+    async fn export(&self) -> Result<(), AppError> {
+        self.check_code_command().await?;
+        let extensions = self.list_extensions().await?;
+        self.save_extensions(&extensions).await
     }
 
-    fn import(&self) -> Result<(), AppError> {
+    async fn import(&self) -> Result<(), AppError> {
         let path = self.get_extensions_path();
-        let extensions = self.read_extensions(&path)?;
+        let extensions = self.read_extensions(&path).await?;
         for ext in extensions {
-            self.install_extension(&ext)?;
+            self.install_extension(&ext).await?;
         }
         Ok(())
     }
 
-    fn ensure_code_command(&self) -> Result<(), AppError> {
-        self.check_code_command()?;
+    async fn ensure_code_command(&self) -> Result<(), AppError> {
+        self.check_code_command().await?;
         println!("Code command is already installed");
         Ok(())
     }

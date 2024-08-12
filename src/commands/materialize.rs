@@ -1,11 +1,13 @@
 use crate::commands::link::LinkOperations;
 use crate::error::app_error::AppError;
 use crate::models::link::FileProcessResult;
+use async_trait::async_trait;
 use std::path::Path;
 use std::sync::Arc;
 
-pub trait Materializable {
-    fn execute(&self, destination: &Path) -> Result<(), AppError>;
+#[async_trait]
+pub trait Materializable: Send + Sync {
+    async fn execute(&self, destination: &Path) -> Result<(), AppError>;
 }
 
 pub struct Materializer {
@@ -18,9 +20,13 @@ impl Materializer {
     }
 }
 
+#[async_trait]
 impl Materializable for Materializer {
-    fn execute(&self, destination: &Path) -> Result<(), AppError> {
-        let results = self.linker.materialize_symlinks_recursively(destination)?;
+    async fn execute(&self, destination: &Path) -> Result<(), AppError> {
+        let results = self
+            .linker
+            .materialize_symlinks_recursively(destination)
+            .await?;
 
         for result in results {
             match result {

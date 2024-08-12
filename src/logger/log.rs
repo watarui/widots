@@ -1,55 +1,40 @@
-use std::{io::stdout, path::Path};
-
 use chrono::Local;
-use fern::{Dispatch, InitError};
+use fern::Dispatch;
 use log::LevelFilter;
+use std::io::stdout;
 
-pub struct Log;
-
-pub trait Logger {
-    fn setup_logger(&self, level: LevelFilter) -> Result<(), InitError>;
+/// Sets up the logger for the application.
+///
+/// # Arguments
+///
+/// * `level` - The log level to use
+///
+/// # Returns
+///
+/// A `Result` indicating success or failure of logger setup.
+pub fn setup_logger(level: LevelFilter) -> Result<(), fern::InitError> {
+    Dispatch::new()
+        .format(move |out, message, record| {
+            out.finish(format_args!(
+                "{} [{}] {}:{} - {}",
+                Local::now().format("%Y-%m-%d %H:%M:%S"),
+                record.level(),
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                message
+            ))
+        })
+        .level(level)
+        .chain(stdout())
+        .apply()?;
+    Ok(())
 }
 
-impl Default for Log {
-    fn default() -> Self {
-        Log::new()
-    }
-}
-
-impl Log {
-    fn new() -> Self {
-        Log
-    }
-}
-
-impl Logger for Log {
-    fn setup_logger(&self, level: LevelFilter) -> Result<(), InitError> {
-        Dispatch::new()
-            .format(move |out, message, record| {
-                // Transform the file path into a relative path from src or tests
-                let file_path = record.file().unwrap_or("unknown");
-                let relative_path = Path::new(file_path)
-                    .strip_prefix(env!("CARGO_MANIFEST_DIR"))
-                    .unwrap_or_else(|_| Path::new(file_path));
-
-                out.finish(format_args!(
-                    "{} [{}] {}:{} - {}",
-                    Local::now().format("%Y-%m-%d %H:%M:%S"),
-                    record.level(),
-                    relative_path.display(),
-                    record.line().unwrap_or(0),
-                    message
-                ))
-            })
-            // Set the maximum log level
-            .level(level)
-            // Output to stdout
-            .chain(stdout())
-            .apply()?;
-        Ok(())
-    }
-}
-
-pub fn setup_logger(level: LevelFilter) -> Result<(), InitError> {
-    Log.setup_logger(level)
+/// Sets the global log level.
+///
+/// # Arguments
+///
+/// * `level` - The new log level to set
+pub fn set_log_level(level: LevelFilter) {
+    log::set_max_level(level);
 }

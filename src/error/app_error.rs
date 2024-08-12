@@ -1,10 +1,9 @@
-use std::{path::PathBuf, sync::Arc};
 use thiserror::Error;
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum AppError {
     #[error("IO error: {0}")]
-    Io(Arc<std::io::Error>),
+    Io(#[from] std::io::Error),
 
     #[error("Home directory not found")]
     HomeDirectoryNotFound,
@@ -16,7 +15,7 @@ pub enum AppError {
     PathStripPrefixError(#[from] std::path::StripPrefixError),
 
     #[error("Failed to canonicalize path: {0}")]
-    PathCanonicalizationError(Arc<std::io::Error>),
+    PathCanonicalizationError(String),
 
     #[error("Command execution error: {0}")]
     CommandExecution(String),
@@ -46,7 +45,7 @@ pub enum AppError {
     Yaml(String),
 
     #[error("File not found: {0}")]
-    FileNotFound(PathBuf),
+    FileNotFound(std::path::PathBuf),
 
     #[error("Permission denied: {0}")]
     PermissionDenied(String),
@@ -78,21 +77,26 @@ pub enum AppError {
     #[error("Unsupported operation: {0}")]
     UnsupportedOperation(String),
 
-    #[error("External command error: {0}")]
-    ExternalCommand(String),
-
     #[error("Unexpected error: {0}")]
     Unexpected(String),
 
-    #[error("Command execution failed: {0}")]
-    ExecuteCommandFailed(String),
-
-    #[error("Failed to add fish to etc shells")]
+    #[error("Failed to add fish to /etc/shells")]
     AddFishToEtcShellsFailed,
 }
 
-impl From<std::io::Error> for AppError {
-    fn from(err: std::io::Error) -> Self {
-        AppError::Io(Arc::new(err))
+impl AppError {
+    pub fn with_context<C>(self, context: C) -> Self
+    where
+        C: std::fmt::Display,
+    {
+        match self {
+            AppError::Io(err) => AppError::Io(std::io::Error::new(
+                err.kind(),
+                format!("{}: {}", context, err),
+            )),
+            AppError::Path(err) => AppError::Path(format!("{}: {}", context, err)),
+            // Add similar handling for other error variants
+            _ => self,
+        }
     }
 }

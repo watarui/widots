@@ -1,3 +1,8 @@
+//! Widots: A dotfile manager
+//!
+//! This library provides the core functionality for managing dotfiles,
+//! including linking, materializing, and running configuration scripts.
+
 pub mod cli;
 pub mod commands;
 pub mod config;
@@ -7,20 +12,13 @@ pub mod logger;
 pub mod models;
 pub mod utils;
 
-use core::{os::OSDetector, path::PathExpander, shell::ShellExecutor};
-use std::sync::Arc;
-
 use config::app_config::AppConfig;
 use error::app_error::AppError;
-use utils::yaml::YamlParser;
 
-pub fn create_app_config() -> AppConfig {
-    AppConfig::new(
-        Arc::new(OSDetector::new()),
-        Arc::new(PathExpander::new()),
-        Arc::new(ShellExecutor::new()),
-        YamlParser::new(),
-    )
+/// Creates a new AppConfig instance
+pub async fn create_app_config() -> std::result::Result<AppConfig, AppError> {
+    AppConfig::new().await
 }
 
+/// Alias for Result<T, AppError>
 pub type Result<T> = std::result::Result<T, AppError>;

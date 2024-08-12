@@ -1,4 +1,6 @@
+use async_trait::async_trait;
 use log::debug;
+use tokio::fs::{copy, create_dir_all};
 
 use crate::config::constants::{
     DEPLOY_DESTINATION_PATH, DEPLOY_SOURCE_PATH, FISH_COMPLETIONS_FILENAME,
@@ -10,11 +12,12 @@ use crate::models::shell::{Argument, Cmd};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-pub trait Deployable {
-    fn execute(&self) -> Result<(), AppError>;
-    fn build_project(&self) -> Result<bool, AppError>;
-    fn deploy_executable(&self) -> Result<(), AppError>;
-    fn locate_fish_completions(&self) -> Result<(), AppError>;
+#[async_trait]
+pub trait Deployable: Send + Sync {
+    async fn execute(&self) -> Result<(), AppError>;
+    async fn build_project(&self) -> Result<bool, AppError>;
+    async fn deploy_executable(&self) -> Result<(), AppError>;
+    async fn locate_fish_completions(&self) -> Result<(), AppError>;
 }
 
 pub struct Deployer {
@@ -27,33 +30,35 @@ impl Deployer {
     }
 }
 
+#[async_trait]
 impl Deployable for Deployer {
-    fn execute(&self) -> Result<(), AppError> {
+    async fn execute(&self) -> Result<(), AppError> {
         println!("Building the project in release mode...");
-        if !self.build_project()? {
+        if !self.build_project().await? {
             return Err(AppError::Deployment("Build failed".to_string()));
         }
 
         println!("Deploying the executable...");
-        self.deploy_executable()?;
+        self.deploy_executable().await?;
         println!("Deployment successful!");
 
         println!("Locating fish shell command completion files...");
-        self.locate_fish_completions()?;
+        self.locate_fish_completions().await?;
         println!("Locate successful!");
 
         Ok(())
     }
 
-    fn build_project(&self) -> Result<bool, AppError> {
-        let output = self.shell.shell(Cmd::Cmd("cargo build --release".into()))?;
+    async fn build_project(&self) -> Result<bool, AppError> {
+        let cmd = Cmd::new("cargo build --release");
+        let output = self.shell.shell(&cmd).await?;
 
         debug!("cargo build --release output: {:?}", output);
 
         Ok(output.status.success())
     }
 
-    fn deploy_executable(&self) -> Result<(), AppError> {
+    async fn deploy_executable(&self) -> Result<(), AppError> {
         let source_path = Path::new(DEPLOY_SOURCE_PATH);
         let dest_path = Path::new(DEPLOY_DESTINATION_PATH);
 
@@ -67,30 +72,27 @@ impl Deployable for Deployer {
             return Err(AppError::FileNotFound(source_path.to_path_buf()));
         }
 
-        self.shell.sudo(
-            Cmd::Cmd("cp".into()),
-            Argument::Args(vec![
-                source_path.to_str().unwrap().into(),
-                dest_path.to_str().unwrap().into(),
-            ]),
-        )?;
+        let cmd = Cmd::new("cp");
+        let args = Argument::Args(vec![
+            source_path.to_str().unwrap().into(),
+            dest_path.to_str().unwrap().into(),
+        ]);
+        self.shell.sudo(&cmd, &args).await?;
 
-        self.shell.sudo(
-            Cmd::Cmd("chmod".into()),
-            Argument::Args(vec!["+x".into(), dest_path.to_str().unwrap().into()]),
-        )?;
+        let cmd = Cmd::new("chmod");
+        let args = Argument::Args(vec!["+x".into(), dest_path.to_str().unwrap().into()]);
+        self.shell.sudo(&cmd, &args).await?;
 
         Ok(())
     }
 
-    fn locate_fish_completions(&self) -> Result<(), AppError> {
+    async fn locate_fish_completions(&self) -> Result<(), AppError> {
         let home = dirs::home_dir().ok_or(AppError::HomeDirectoryNotFound)?;
-        // todo constants
         let source_path = PathBuf::from(FISH_COMPLETIONS_SOURCE_PATH);
         let dest_dir = home.join(FISH_COMPLETIONS_TARGET_DIR);
         let dest_path = dest_dir.join(FISH_COMPLETIONS_FILENAME);
 
-        std::fs::create_dir_all(&dest_dir).map_err(|e| AppError::Io(Arc::new(e)))?;
+        create_dir_all(&dest_dir).await?;
 
         debug!(
             "Copy fish completions file from {:?} to {:?}",
@@ -98,7 +100,7 @@ impl Deployable for Deployer {
             dest_path.display()
         );
 
-        std::fs::copy(&source_path, &dest_path).map_err(|e| AppError::Io(Arc::new(e)))?;
+        copy(&source_path, &dest_path).await?;
         Ok(())
     }
 }

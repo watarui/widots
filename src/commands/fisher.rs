@@ -1,13 +1,15 @@
+use async_trait::async_trait;
 use log::debug;
+use std::collections::HashSet;
+use std::sync::Arc;
 
 use crate::core::shell::ShellOperations;
 use crate::error::app_error::AppError;
 use crate::models::shell::Cmd;
-use std::collections::HashSet;
-use std::sync::Arc;
 
-pub trait FisherOperations {
-    fn install(&self) -> Result<(), AppError>;
+#[async_trait]
+pub trait FisherOperations: Send + Sync {
+    async fn install(&self) -> Result<(), AppError>;
 }
 
 pub struct Fisher {
@@ -19,20 +21,24 @@ impl Fisher {
         Self { shell }
     }
 
-    fn is_installed(&self) -> bool {
+    async fn is_installed(&self) -> bool {
+        let cmd = Cmd::new("fish -c 'type -q fisher'");
         self.shell
-            .shell(Cmd::Cmd("fish -c 'type -q fisher'".into()))
+            .shell(&cmd)
+            .await
             .map(|output| output.status.success())
             .unwrap_or(false)
     }
 
-    fn install_fisher(&self) -> Result<std::process::Output, AppError> {
+    async fn install_fisher(&self) -> Result<std::process::Output, AppError> {
         let install_command = "curl -sL https://raw.githubusercontent.com/jorgebucaran/fisher/main/functions/fisher.fish | source && fisher install jorgebucaran/fisher";
-        self.shell.shell(Cmd::Cmd(install_command.into()))
+        let cmd = Cmd::new(install_command);
+        self.shell.shell(&cmd).await
     }
 
-    fn read_plugins(&self) -> Result<HashSet<String>, AppError> {
-        let output = self.shell.shell(Cmd::Cmd("fish -c 'fisher list'".into()))?;
+    async fn read_plugins(&self) -> Result<HashSet<String>, AppError> {
+        let cmd = Cmd::new("fish -c 'fisher list'");
+        let output = self.shell.shell(&cmd).await?;
 
         if !output.status.success() {
             return Err(AppError::Fish("Failed to list Fisher plugins".to_string()));
@@ -50,11 +56,10 @@ impl Fisher {
         Ok(plugins)
     }
 
-    fn install_plugins(&self, plugins: &HashSet<String>) -> Result<(), AppError> {
+    async fn install_plugins(&self, plugins: &HashSet<String>) -> Result<(), AppError> {
         for plugin in plugins {
-            let output = self.shell.shell(Cmd::Cmd(
-                format!("fish -c 'fisher install {}'", plugin).into(),
-            ))?;
+            let cmd = Cmd::new(format!("fish -c 'fisher install {}'", plugin));
+            let output = self.shell.shell(&cmd).await?;
             if !output.status.success() {
                 let error_message = String::from_utf8_lossy(&output.stderr);
                 return Err(AppError::Fish(format!(
@@ -67,17 +72,18 @@ impl Fisher {
     }
 }
 
+#[async_trait]
 impl FisherOperations for Fisher {
-    fn install(&self) -> Result<(), AppError> {
-        if self.is_installed() {
+    async fn install(&self) -> Result<(), AppError> {
+        if self.is_installed().await {
             return Err(AppError::Fish("Fisher is already installed".to_string()));
         }
 
-        let output = self.install_fisher()?;
+        let output = self.install_fisher().await?;
 
         if output.status.success() {
-            let plugins = self.read_plugins()?;
-            self.install_plugins(&plugins)
+            let plugins = self.read_plugins().await?;
+            self.install_plugins(&plugins).await
         } else {
             let error_message = String::from_utf8_lossy(&output.stderr);
             Err(AppError::Fish(format!(
