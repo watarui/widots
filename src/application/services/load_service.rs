@@ -45,14 +45,14 @@ impl LoadService {
     ) -> Result<(), AppError> {
         let yaml_script = self.yaml_parser.parse(yaml_path).await?;
 
-        self.evaluate_links_section(&yaml_script, target, force)
+        self.evaluate_link_section(&yaml_script, target, force)
             .await?;
         self.evaluate_provision_section(&yaml_script).await?;
 
         Ok(())
     }
 
-    async fn evaluate_links_section(
+    async fn evaluate_link_section(
         &self,
         yaml_script: &Yaml,
         target: &Path,

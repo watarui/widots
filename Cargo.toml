@@ -29,18 +29,17 @@ config = "0.14.0"
 dirs = "5.0.1"
 fern = { version = "0.6.2", features = ["chrono", "colored"] }
 futures = "0.3.30"
-futures-util = "0.3.30"
 inquire = "0.7.5"
 lazy_static = "1.5.0"
 log = "0.4.22"
 serde = { version = "1.0.204", features = ["derive"] }
-serde_yaml = "0.9.34"
 tempfile = "3.11.0"
 thiserror = "1.0.63"
 tokio = { version = "1.39.2", features = ["full"] }
 uuid = { version = "1.10.0", features = ["v4"] }
 walkdir = "2.5.0"
 whoami = "1.5.1"
+yaml-rust2 = "0.8.1"
 
 [features]
 fish_installed = []
