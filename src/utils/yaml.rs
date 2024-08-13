@@ -1,14 +1,12 @@
-use crate::error::AppError;
+use crate::{error::AppError, models::yaml::Yaml};
 use async_trait::async_trait;
-use serde::de::DeserializeOwned;
 use std::path::Path;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
 #[async_trait]
 pub trait YamlOperations: Send + Sync {
-    // todo implement
-    async fn _parse<T: DeserializeOwned>(&self, path: &Path) -> Result<T, AppError>;
+    async fn parse(&self, path: &Path) -> Result<Yaml, AppError>;
 }
 
 pub struct YamlParser;
@@ -21,7 +19,7 @@ impl YamlParser {
 
 #[async_trait]
 impl YamlOperations for YamlParser {
-    async fn _parse<T: DeserializeOwned>(&self, path: &Path) -> Result<T, AppError> {
+    async fn parse(&self, path: &Path) -> Result<Yaml, AppError> {
         let mut file = File::open(path)
             .await
             .map_err(|e| AppError::IoError(e.to_string()))?;

@@ -31,11 +31,12 @@ impl LinkService {
         let source = self.path_operations.parse_path(source).await?;
         let target = self.path_operations.parse_path(target).await?;
 
-        if !self.confirm_action(&format!(
+        let ans = self.confirm_action(&format!(
             "This will link files from {:?} to {:?}. Do you want to continue?",
             source.display(),
             target.display()
-        ))? {
+        ))?;
+        if !ans {
             return Ok(vec![]);
         }
 

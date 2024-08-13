@@ -2,6 +2,7 @@ use crate::application::services::brew_service::BrewService;
 use crate::application::services::deploy_service::DeployService;
 use crate::application::services::fish_service::FishService;
 use crate::application::services::link_service::LinkService;
+use crate::application::services::load_service::LoadService;
 use crate::application::services::vscode_service::VSCodeService;
 use crate::config::Config;
 use crate::domain::link::LinkOperations;
@@ -14,7 +15,7 @@ use crate::infrastructure::link::LinkerImpl;
 use crate::infrastructure::os::OSDetector;
 use crate::infrastructure::path::PathExpander;
 use crate::infrastructure::shell::executor::SystemShellExecutor;
-use crate::utils::yaml::YamlParser;
+use crate::utils::yaml::{YamlOperations, YamlParser};
 use std::sync::Arc;
 
 pub struct AppConfig {
@@ -23,11 +24,12 @@ pub struct AppConfig {
     pub os_detector: Arc<dyn OSOperations>,
     pub path_operations: Arc<dyn PathOperations>,
     pub link_service: LinkService,
+    pub load_service: LoadService,
     pub deploy_service: DeployService,
     pub brew_service: BrewService,
     pub fish_service: FishService,
     pub vscode_service: VSCodeService,
-    pub yaml_parser: Arc<YamlParser>,
+    pub yaml_parser: Arc<dyn YamlOperations>,
 }
 
 impl AppConfig {
@@ -43,7 +45,15 @@ impl AppConfig {
         let link_operations: Arc<dyn LinkOperations> =
             Arc::new(LinkerImpl::new(path_operations.clone()));
 
-        let link_service = LinkService::new(link_operations, path_operations.clone());
+        let link_service = LinkService::new(link_operations.clone(), path_operations.clone());
+
+        let load_service = LoadService::new(
+            link_operations.clone(),
+            path_operations.clone(),
+            yaml_parser.clone(),
+            os_detector.clone(),
+            shell_executor.clone(),
+        );
 
         let deploy_service = DeployService::new(shell_executor.clone(), path_operations.clone());
         let brew_service =
@@ -64,6 +74,7 @@ impl AppConfig {
             os_detector,
             path_operations,
             link_service,
+            load_service,
             deploy_service,
             brew_service,
             fish_service,
@@ -84,8 +95,16 @@ impl AppConfig {
         self.path_operations.clone()
     }
 
+    pub fn _get_yaml_parser(&self) -> Arc<dyn YamlOperations> {
+        self.yaml_parser.clone()
+    }
+
     pub fn get_link_service(&self) -> &LinkService {
         &self.link_service
+    }
+
+    pub fn get_load_service(&self) -> &LoadService {
+        &self.load_service
     }
 
     pub fn get_deploy_service(&self) -> &DeployService {
@@ -102,9 +121,5 @@ impl AppConfig {
 
     pub fn get_vscode_service(&self) -> &VSCodeService {
         &self.vscode_service
-    }
-
-    pub fn _get_yaml_parser(&self) -> Arc<YamlParser> {
-        self.yaml_parser.clone()
     }
 }
