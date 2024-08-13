@@ -16,4 +16,6 @@ pub trait LinkOperations: Send + Sync {
         &self,
         target: &Path,
     ) -> Result<Vec<FileProcessResult>, AppError>;
+
+    fn should_ignore(&self, path: &Path) -> bool;
 }

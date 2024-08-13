@@ -5,19 +5,22 @@ use crate::application::services::vscode_service::VSCodeService;
 use crate::config::Config;
 use crate::domain::link::LinkOperations;
 use crate::domain::os::OSOperations;
+use crate::domain::path::PathOperations;
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
 use crate::infrastructure::fs::FileSystemOperationsImpl;
+use crate::infrastructure::link::LinkerImpl;
 use crate::infrastructure::os::OSDetector;
+use crate::infrastructure::path::PathExpander;
 use crate::infrastructure::shell::executor::SystemShellExecutor;
 use crate::utils::yaml::YamlParser;
 use std::sync::Arc;
 
 pub struct AppConfig {
-    // todo implement
     pub _config: Config,
     pub shell_executor: Arc<dyn ShellExecutor>,
     pub os_detector: Arc<dyn OSOperations>,
+    pub path_operations: Arc<dyn PathOperations>,
     pub link_service: LinkService,
     pub brew_service: BrewService,
     pub fish_service: FishService,
@@ -32,15 +35,13 @@ impl AppConfig {
         let shell_executor: Arc<dyn ShellExecutor> = Arc::new(SystemShellExecutor::new());
         let os_detector: Arc<dyn OSOperations> = Arc::new(OSDetector::new());
         let fs_operations = Arc::new(FileSystemOperationsImpl::new());
+        let path_operations: Arc<dyn PathOperations> = Arc::new(PathExpander::new());
         let yaml_parser = Arc::new(YamlParser::new());
 
         let link_operations: Arc<dyn LinkOperations> =
-            Arc::new(crate::infrastructure::link::LinkerImpl::new(
-                fs_operations.clone(),
-                shell_executor.clone(),
-            ));
+            Arc::new(LinkerImpl::new(path_operations.clone()));
 
-        let link_service = LinkService::new(link_operations);
+        let link_service = LinkService::new(link_operations, path_operations.clone());
 
         let brew_service =
             BrewService::new(shell_executor.clone(), fs_operations.clone(), &config.brew);
@@ -58,6 +59,7 @@ impl AppConfig {
             _config: config,
             shell_executor,
             os_detector,
+            path_operations,
             link_service,
             brew_service,
             fish_service,
@@ -72,6 +74,10 @@ impl AppConfig {
 
     pub fn get_os_detector(&self) -> Arc<dyn OSOperations> {
         self.os_detector.clone()
+    }
+
+    pub fn get_path_operations(&self) -> Arc<dyn PathOperations> {
+        self.path_operations.clone()
     }
 
     pub fn get_link_service(&self) -> &LinkService {

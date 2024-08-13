@@ -1,27 +1,22 @@
 use crate::config::constants::{LINK_IGNORED_ANCESTORS, LINK_IGNORED_FILES, LINK_IGNORED_PREFIXES};
 use crate::domain::link::LinkOperations;
-use crate::domain::shell::ShellExecutor;
+use crate::domain::path::PathOperations;
 use crate::error::AppError;
-use crate::infrastructure::fs::FileSystemOperations;
 use crate::models::link::FileProcessResult;
 use async_trait::async_trait;
+use futures::stream::{self, StreamExt};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::fs;
 
 pub struct LinkerImpl {
-    _fs_operations: Arc<dyn FileSystemOperations>,
-    _shell_executor: Arc<dyn ShellExecutor>,
+    _path_operations: Arc<dyn PathOperations>,
 }
 
 impl LinkerImpl {
-    pub fn new(
-        fs_operations: Arc<dyn FileSystemOperations>,
-        shell_executor: Arc<dyn ShellExecutor>,
-    ) -> Self {
+    pub fn new(path_operations: Arc<dyn PathOperations>) -> Self {
         Self {
-            _fs_operations: fs_operations,
-            _shell_executor: shell_executor,
+            _path_operations: path_operations,
         }
     }
 
@@ -44,25 +39,66 @@ impl LinkerImpl {
         fs::symlink(source, target)
             .await
             .map_err(|e| AppError::IoError(e.to_string()))?;
+
         Ok(FileProcessResult::Linked(
             source.to_path_buf(),
             target.to_path_buf(),
         ))
     }
 
-    fn should_ignore(&self, path: &Path) -> bool {
-        let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    async fn ensure_parent_directory(&self, path: &Path) -> Result<(), AppError> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .await
+                .map_err(|e| AppError::IoError(e.to_string()))?;
+        }
+        Ok(())
+    }
 
-        LINK_IGNORED_FILES.contains(file_name)
-            || LINK_IGNORED_PREFIXES
-                .iter()
-                .any(|&prefix| file_name.starts_with(prefix))
-            || path.ancestors().any(|p| {
-                p.file_name()
-                    .and_then(|n| n.to_str())
-                    .map(|name| LINK_IGNORED_ANCESTORS.contains(&name))
-                    .unwrap_or(false)
-            })
+    async fn process_entry(
+        &self,
+        entry: walkdir::DirEntry,
+        source_path: &Path,
+        target_path: &Path,
+        force: bool,
+    ) -> FileProcessResult {
+        let path = entry.path();
+        let relative_path = path.strip_prefix(source_path).unwrap();
+        let target = target_path.join(relative_path);
+
+        if path.is_file() {
+            match self.ensure_parent_directory(&target).await {
+                Ok(_) => self
+                    .create_symlink(path, &target, force)
+                    .await
+                    .unwrap_or_else(FileProcessResult::Error),
+                Err(e) => FileProcessResult::Error(e),
+            }
+        } else if path.is_dir() {
+            if !target.exists() {
+                fs::create_dir_all(&target)
+                    .await
+                    .map(|_| FileProcessResult::Created(target))
+                    .unwrap_or_else(|e| FileProcessResult::Error(AppError::IoError(e.to_string())))
+            } else {
+                FileProcessResult::Skipped(target)
+            }
+        } else {
+            FileProcessResult::Skipped(path.to_path_buf())
+        }
+    }
+
+    async fn materialize_symlink(&self, path: &Path) -> Result<FileProcessResult, AppError> {
+        let target = fs::read_link(path)
+            .await
+            .map_err(|e| AppError::LinkError(e.to_string()))?;
+        fs::remove_file(path)
+            .await
+            .map_err(|e| AppError::IoError(e.to_string()))?;
+        fs::copy(&target, path)
+            .await
+            .map_err(|e| AppError::IoError(e.to_string()))?;
+        Ok(FileProcessResult::Materialized(path.to_path_buf(), target))
     }
 }
 
@@ -74,41 +110,15 @@ impl LinkOperations for LinkerImpl {
         target: &Path,
         force: bool,
     ) -> Result<Vec<FileProcessResult>, AppError> {
-        let mut results = Vec::new();
-        let mut dirs = vec![source.to_path_buf()];
+        let walker = walkdir::WalkDir::new(source).into_iter();
+        let filtered_entries = walker
+            .filter_entry(|e| !self.should_ignore(e.path()))
+            .filter_map(Result::ok);
 
-        while let Some(dir) = dirs.pop() {
-            let mut entries = fs::read_dir(&dir)
-                .await
-                .map_err(|e| AppError::IoError(e.to_string()))?;
-
-            while let Some(entry) = entries
-                .next_entry()
-                .await
-                .map_err(|e| AppError::IoError(e.to_string()))?
-            {
-                let path = entry.path();
-                if self.should_ignore(&path) {
-                    continue;
-                }
-
-                let relative = path
-                    .strip_prefix(source)
-                    .map_err(|e| AppError::PathError(e.to_string()))?;
-                let target_path = target.join(relative);
-
-                if path.is_dir() {
-                    dirs.push(path.clone());
-                    fs::create_dir_all(&target_path)
-                        .await
-                        .map_err(|e| AppError::IoError(e.to_string()))?;
-                    results.push(FileProcessResult::Created(target_path));
-                } else {
-                    let result = self.create_symlink(&path, &target_path, force).await?;
-                    results.push(result);
-                }
-            }
-        }
+        let results = stream::iter(filtered_entries)
+            .then(|entry| async move { self.process_entry(entry, source, target, force).await })
+            .collect::<Vec<_>>()
+            .await;
 
         Ok(results)
     }
@@ -135,20 +145,26 @@ impl LinkOperations for LinkerImpl {
                 if path.is_dir() {
                     dirs.push(path);
                 } else if path.is_symlink() {
-                    let target = fs::read_link(&path)
-                        .await
-                        .map_err(|e| AppError::IoError(e.to_string()))?;
-                    fs::remove_file(&path)
-                        .await
-                        .map_err(|e| AppError::IoError(e.to_string()))?;
-                    fs::copy(&target, &path)
-                        .await
-                        .map_err(|e| AppError::IoError(e.to_string()))?;
-                    results.push(FileProcessResult::Materialized(path, target));
+                    results.push(self.materialize_symlink(&path).await?);
                 }
             }
         }
 
         Ok(results)
+    }
+
+    fn should_ignore(&self, path: &Path) -> bool {
+        let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+        LINK_IGNORED_FILES.contains(file_name)
+            || LINK_IGNORED_PREFIXES
+                .iter()
+                .any(|prefix| file_name.starts_with(prefix))
+            || path.ancestors().any(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|name| LINK_IGNORED_ANCESTORS.contains(name))
+                    .unwrap_or(false)
+            })
     }
 }

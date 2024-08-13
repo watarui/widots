@@ -25,7 +25,7 @@ pub async fn execute(args: MaterializeArgs, config: &AppConfig) -> Result<(), Ap
                     original.display()
                 );
             }
-            FileProcessResult::_Error(e) => {
+            FileProcessResult::Error(e) => {
                 println!("Error: {:?}", e);
             }
             _ => {}

@@ -7,5 +7,5 @@ pub enum FileProcessResult {
     Created(PathBuf),
     Materialized(PathBuf, PathBuf),
     Skipped(PathBuf),
-    _Error(AppError),
+    Error(AppError),
 }

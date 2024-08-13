@@ -18,16 +18,18 @@ pub enum AppError {
     #[error("Unsupported OS: {0}")]
     UnsupportedOS(String),
 
-    #[error("Path error: {0}")]
-    PathError(String),
-
-    // #[error("Link error: {0}")]
-    // LinkError(String),
+    // #[error("Path error: {0}")]
+    // PathError(String),
+    #[error("Link error: {0}")]
+    LinkError(String),
     #[error("Logger error: {0}")]
     LoggerError(String),
     // #[error("File not found: {0}")]
     // FileNotFound(PathBuf),
-
+    #[error("Directory not found")]
+    DirectoryNotFound,
+    // #[error("Failed to canonicalize path: {0}")]
+    // PathCanonicalizationError(String),
     // #[error("Homebrew error: {0}")]
     // HomebrewError(String),
 
@@ -50,10 +52,13 @@ impl AppError {
             AppError::ShellExecutionError(e) => {
                 AppError::ShellExecutionError(format!("{}: {}", context, e))
             }
+            // AppError::PathCanonicalizationError(e) => {
+            //     AppError::PathCanonicalizationError(format!("{}: {}", context, e))
+            // }
             AppError::UnsupportedOS(e) => AppError::UnsupportedOS(format!("{}: {}", context, e)),
-            AppError::PathError(e) => AppError::PathError(format!("{}: {}", context, e)),
-            // AppError::LinkError(e) => AppError::LinkError(format!("{}: {}", context, e)),
-            AppError::LoggerError(e) => AppError::LoggerError(format!("{}: {}", context, e)),
+            // AppError::PathError(e) => AppError::PathError(format!("{}: {}", context, e)),
+            AppError::DirectoryNotFound => AppError::DirectoryNotFound,
+            AppError::LinkError(e) => AppError::LinkError(format!("{}: {}", context, e)),
             // AppError::FileNotFound(p) => AppError::FileNotFound(p),
             // AppError::HomebrewError(e) => AppError::HomebrewError(format!("{}: {}", context, e)),
             // AppError::FishError(e) => AppError::FishError(format!("{}: {}", context, e)),
@@ -61,6 +66,7 @@ impl AppError {
             // AppError::UnexpectedError(e) => {
             //     AppError::UnexpectedError(format!("{}: {}", context, e))
             // }
+            AppError::LoggerError(e) => AppError::LoggerError(format!("{}: {}", context, e)),
         }
     }
 }

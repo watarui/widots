@@ -25,6 +25,8 @@ lazy_static! {
 
 // pub const DEFAULT_CONFIG_PATH: &str = "~/.config/widots/config.yml";
 
+pub const TEST_HOME_DIR: &str = ".widots-test";
+
 // pub const BREW_FORMULA_FILENAME: &str = "brew_formulas.txt";
 // pub const BREW_CASK_FORMULA_FILENAME: &str = "brew_casks.txt";
 
