@@ -6,30 +6,23 @@ use crate::application::services::load_service::LoadService;
 use crate::application::services::vscode_service::VSCodeService;
 use crate::config::Config;
 use crate::domain::link::LinkOperations;
-use crate::domain::os::OSOperations;
-use crate::domain::path::PathOperations;
-use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
 use crate::infrastructure::fs::FileSystemOperationsImpl;
 use crate::infrastructure::link::LinkerImpl;
 use crate::infrastructure::os::OSDetector;
 use crate::infrastructure::path::PathExpander;
 use crate::infrastructure::shell::executor::SystemShellExecutor;
-use crate::utils::yaml::{YamlOperations, YamlParser};
+use crate::utils::yaml::YamlParser;
 use std::sync::Arc;
 
 pub struct AppConfig {
     pub _config: Config,
-    pub shell_executor: Arc<dyn ShellExecutor>,
-    pub os_detector: Arc<dyn OSOperations>,
-    pub path_operations: Arc<dyn PathOperations>,
     pub link_service: LinkService,
     pub load_service: LoadService,
     pub deploy_service: DeployService,
     pub brew_service: BrewService,
     pub fish_service: FishService,
     pub vscode_service: VSCodeService,
-    pub yaml_parser: Arc<dyn YamlOperations>,
 }
 
 impl AppConfig {
@@ -70,33 +63,13 @@ impl AppConfig {
 
         Ok(Self {
             _config: config,
-            shell_executor,
-            os_detector,
-            path_operations,
             link_service,
             load_service,
             deploy_service,
             brew_service,
             fish_service,
             vscode_service,
-            yaml_parser,
         })
-    }
-
-    pub fn _get_shell_executor(&self) -> Arc<dyn ShellExecutor> {
-        self.shell_executor.clone()
-    }
-
-    pub fn _get_os_detector(&self) -> Arc<dyn OSOperations> {
-        self.os_detector.clone()
-    }
-
-    pub fn _get_path_operations(&self) -> Arc<dyn PathOperations> {
-        self.path_operations.clone()
-    }
-
-    pub fn _get_yaml_parser(&self) -> Arc<dyn YamlOperations> {
-        self.yaml_parser.clone()
     }
 
     pub fn get_link_service(&self) -> &LinkService {
