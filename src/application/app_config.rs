@@ -1,4 +1,5 @@
 use crate::application::services::brew_service::BrewService;
+use crate::application::services::deploy_service::DeployService;
 use crate::application::services::fish_service::FishService;
 use crate::application::services::link_service::LinkService;
 use crate::application::services::vscode_service::VSCodeService;
@@ -8,6 +9,7 @@ use crate::domain::os::OSOperations;
 use crate::domain::path::PathOperations;
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
+use crate::infrastructure::deploy::Deployer;
 use crate::infrastructure::fs::FileSystemOperationsImpl;
 use crate::infrastructure::link::LinkerImpl;
 use crate::infrastructure::os::OSDetector;
@@ -22,6 +24,7 @@ pub struct AppConfig {
     pub os_detector: Arc<dyn OSOperations>,
     pub path_operations: Arc<dyn PathOperations>,
     pub link_service: LinkService,
+    pub deploy_service: DeployService,
     pub brew_service: BrewService,
     pub fish_service: FishService,
     pub vscode_service: VSCodeService,
@@ -32,17 +35,19 @@ impl AppConfig {
     pub async fn new() -> Result<Self, AppError> {
         let config = Config::load().map_err(|e| AppError::ConfigError(e.to_string()))?;
 
-        let shell_executor: Arc<dyn ShellExecutor> = Arc::new(SystemShellExecutor::new());
-        let os_detector: Arc<dyn OSOperations> = Arc::new(OSDetector::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
+        let os_detector = Arc::new(OSDetector::new());
         let fs_operations = Arc::new(FileSystemOperationsImpl::new());
-        let path_operations: Arc<dyn PathOperations> = Arc::new(PathExpander::new());
+        let path_operations = Arc::new(PathExpander::new());
         let yaml_parser = Arc::new(YamlParser::new());
+        let deploy_operations = Arc::new(Deployer::new());
 
         let link_operations: Arc<dyn LinkOperations> =
             Arc::new(LinkerImpl::new(path_operations.clone()));
 
         let link_service = LinkService::new(link_operations, path_operations.clone());
 
+        let deploy_service = DeployService::new(deploy_operations.clone(), shell_executor.clone());
         let brew_service =
             BrewService::new(shell_executor.clone(), fs_operations.clone(), &config.brew);
 
@@ -61,6 +66,7 @@ impl AppConfig {
             os_detector,
             path_operations,
             link_service,
+            deploy_service,
             brew_service,
             fish_service,
             vscode_service,
@@ -82,6 +88,10 @@ impl AppConfig {
 
     pub fn get_link_service(&self) -> &LinkService {
         &self.link_service
+    }
+
+    pub fn get_deploy_service(&self) -> &DeployService {
+        &self.deploy_service
     }
 
     pub fn get_brew_service(&self) -> &BrewService {

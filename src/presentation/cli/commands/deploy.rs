@@ -1,9 +1,9 @@
 use crate::application::AppConfig;
 use crate::error::AppError;
-// use crate::models::link::FileProcessResult;
-// use clap::Args;
-// use std::path::PathBuf;
 
-pub async fn execute(_config: &AppConfig) -> Result<(), AppError> {
-    unimplemented!()
+pub async fn execute(config: &AppConfig) -> Result<(), AppError> {
+    config.get_deploy_service().build().await?;
+    config.get_deploy_service().deploy().await?;
+    println!("Deployed successfully");
+    Ok(())
 }
