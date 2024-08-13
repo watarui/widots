@@ -1,56 +1,85 @@
-use crate::domain::deploy::DeployOperations;
+use tokio::fs;
+
+use crate::config::constants::{
+    DEPLOY_DESTINATION_PATH, DEPLOY_SOURCE_PATH, FISH_COMPLETIONS_FILENAME,
+    FISH_COMPLETIONS_SOURCE_PATH, FISH_COMPLETIONS_TARGET_DIR,
+};
+use crate::domain::path::PathOperations;
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
+use std::path::Path;
 use std::sync::Arc;
 
 pub struct DeployService {
-    deploy_operations: Arc<dyn DeployOperations>,
     shell_executor: Arc<dyn ShellExecutor>,
+    path_expander: Arc<dyn PathOperations>,
 }
 
 impl DeployService {
     pub fn new(
-        deploy_operations: Arc<dyn DeployOperations>,
         shell_executor: Arc<dyn ShellExecutor>,
+        path_expander: Arc<dyn PathOperations>,
     ) -> Self {
         Self {
-            deploy_operations,
             shell_executor,
+            path_expander,
         }
     }
 
-    // async fn deploy(&self) -> Result<(), AppError> {
-    //     println!("Building the project in release mode...");
-    //     if !self.build_project()? {
-    //         return Err(AppError::Deployment("Build failed".to_string()));
-    //     }
+    pub async fn execute(&self) -> Result<(), AppError> {
+        println!("Building the project in release mode...");
+        let output = self.shell_executor.output("cargo build --release").await?;
+        if !output.status.success() {
+            return Err(AppError::DeploymentError(
+                self.shell_executor.stderr(&output),
+            ));
+        }
 
-    //     println!("Deploying the executable...");
-    //     self.deploy_executable()?;
-    //     println!("Deployment successful!");
+        println!("Deploying the executable...");
+        self.deploy_executable().await?;
+        println!("Deployment successful!");
 
-    //     println!("Locating fish shell command completion files...");
-    //     self.locate_fish_completions()?;
-    //     println!("Locate successful!");
+        println!("Locating fish shell command completion files...");
+        self.locate_fish_completions().await?;
+        println!("Locate successful!");
 
-    //     Ok(())
-    // }
-
-    // async fn build_release(&self) -> Result<(), AppError> {
-    //     let output = self.shell_executor.execute("cargo build --release").await?;
-    //     if output.status.success() {
-    //         Ok(())
-    //     } else {
-    //         Err(AppError::Deployment("Build failed".to_string()))
-    //     }
-    // }
-
-    pub async fn build(&self) -> Result<(), AppError> {
-        self.deploy_operations.build_project().await
+        Ok(())
     }
 
-    pub async fn deploy(&self) -> Result<(), AppError> {
-        self.deploy_operations.deploy_executable().await;
-        self.deploy_operations.locate_fish_completions().await
+    async fn deploy_executable(&self) -> Result<(), AppError> {
+        let source = Path::new(DEPLOY_SOURCE_PATH);
+        let destination = self
+            .path_expander
+            .parse_path(Path::new(DEPLOY_DESTINATION_PATH))
+            .await?;
+
+        if !source.exists() {
+            return Err(AppError::FileNotFound(source.to_path_buf()));
+        }
+
+        let command = format!("sudo cp {} {}", source.display(), destination.display());
+        self.shell_executor.execute(&command).await?;
+        let command = format!("sudo chmod +x {}", destination.display());
+        self.shell_executor.execute(&command).await?;
+
+        Ok(())
+    }
+
+    async fn locate_fish_completions(&self) -> Result<(), AppError> {
+        let target_dir = self
+            .path_expander
+            .parse_path(Path::new(FISH_COMPLETIONS_TARGET_DIR))
+            .await?;
+        fs::create_dir_all(&target_dir)
+            .await
+            .map_err(|e| AppError::IoError(e.to_string()))?;
+
+        let source = Path::new(FISH_COMPLETIONS_SOURCE_PATH);
+        let target = target_dir.join(FISH_COMPLETIONS_FILENAME);
+        fs::copy(&source, &target)
+            .await
+            .map_err(|e| AppError::IoError(e.to_string()))?;
+
+        Ok(())
     }
 }

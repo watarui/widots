@@ -9,7 +9,6 @@ use crate::domain::os::OSOperations;
 use crate::domain::path::PathOperations;
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
-use crate::infrastructure::deploy::Deployer;
 use crate::infrastructure::fs::FileSystemOperationsImpl;
 use crate::infrastructure::link::LinkerImpl;
 use crate::infrastructure::os::OSDetector;
@@ -40,14 +39,13 @@ impl AppConfig {
         let fs_operations = Arc::new(FileSystemOperationsImpl::new());
         let path_operations = Arc::new(PathExpander::new());
         let yaml_parser = Arc::new(YamlParser::new());
-        let deploy_operations = Arc::new(Deployer::new());
 
         let link_operations: Arc<dyn LinkOperations> =
             Arc::new(LinkerImpl::new(path_operations.clone()));
 
         let link_service = LinkService::new(link_operations, path_operations.clone());
 
-        let deploy_service = DeployService::new(deploy_operations.clone(), shell_executor.clone());
+        let deploy_service = DeployService::new(shell_executor.clone(), path_operations.clone());
         let brew_service =
             BrewService::new(shell_executor.clone(), fs_operations.clone(), &config.brew);
 

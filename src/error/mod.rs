@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 // use std::path::PathBuf;
 use thiserror::Error;
 
@@ -22,17 +24,19 @@ pub enum AppError {
     // PathError(String),
     #[error("Link error: {0}")]
     LinkError(String),
+
     #[error("Logger error: {0}")]
     LoggerError(String),
-    // #[error("File not found: {0}")]
-    // FileNotFound(PathBuf),
+    #[error("File not found: {0}")]
+    FileNotFound(PathBuf),
     #[error("Directory not found")]
     DirectoryNotFound,
     // #[error("Failed to canonicalize path: {0}")]
     // PathCanonicalizationError(String),
     // #[error("Homebrew error: {0}")]
     // HomebrewError(String),
-
+    #[error("Deployment error: {0}")]
+    DeploymentError(String),
     // #[error("Fish shell error: {0}")]
     // FishError(String),
 
@@ -59,8 +63,11 @@ impl AppError {
             // AppError::PathError(e) => AppError::PathError(format!("{}: {}", context, e)),
             AppError::DirectoryNotFound => AppError::DirectoryNotFound,
             AppError::LinkError(e) => AppError::LinkError(format!("{}: {}", context, e)),
-            // AppError::FileNotFound(p) => AppError::FileNotFound(p),
+            AppError::FileNotFound(p) => AppError::FileNotFound(p),
             // AppError::HomebrewError(e) => AppError::HomebrewError(format!("{}: {}", context, e)),
+            AppError::DeploymentError(e) => {
+                AppError::DeploymentError(format!("{}: {}", context, e))
+            }
             // AppError::FishError(e) => AppError::FishError(format!("{}: {}", context, e)),
             // AppError::VSCodeError(e) => AppError::VSCodeError(format!("{}: {}", context, e)),
             // AppError::UnexpectedError(e) => {

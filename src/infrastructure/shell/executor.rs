@@ -1,3 +1,5 @@
+use std::process::Output;
+
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
 use async_trait::async_trait;
@@ -28,5 +30,18 @@ impl ShellExecutor for SystemShellExecutor {
                 String::from_utf8_lossy(&output.stderr).to_string(),
             ))
         }
+    }
+
+    async fn output(&self, command: &str) -> Result<Output, AppError> {
+        Command::new("sh")
+            .arg("-c")
+            .arg(command)
+            .output()
+            .await
+            .map_err(|e| AppError::ShellExecutionError(e.to_string()))
+    }
+
+    fn stderr(&self, output: &Output) -> String {
+        String::from_utf8_lossy(&output.stderr).to_string()
     }
 }

@@ -36,5 +36,5 @@ pub const DEPLOY_SOURCE_PATH: &str = "target/release/widots";
 pub const DEPLOY_DESTINATION_PATH: &str = "/usr/local/bin/widots";
 
 pub const FISH_COMPLETIONS_SOURCE_PATH: &str = "completions/widots.fish";
-pub const FISH_COMPLETIONS_TARGET_DIR: &str = ".config/fish/completions";
+pub const FISH_COMPLETIONS_TARGET_DIR: &str = "~/.config/fish/completions";
 pub const FISH_COMPLETIONS_FILENAME: &str = "widots.fish";

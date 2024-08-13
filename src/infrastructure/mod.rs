@@ -1,4 +1,3 @@
-pub mod deploy;
 pub mod fs;
 pub mod link;
 pub mod os;
