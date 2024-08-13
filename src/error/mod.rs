@@ -44,7 +44,7 @@ pub enum AppError {
 }
 
 impl AppError {
-    pub fn with_context<C: std::fmt::Display>(self, context: C) -> Self {
+    pub fn _with_context<C: std::fmt::Display>(self, context: C) -> Self {
         match self {
             AppError::IoError(e) => AppError::IoError(format!("{}: {}", context, e)),
             AppError::YamlParseError(e) => AppError::YamlParseError(format!("{}: {}", context, e)),

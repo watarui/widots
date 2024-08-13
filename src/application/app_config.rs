@@ -68,15 +68,15 @@ impl AppConfig {
         })
     }
 
-    pub fn get_shell_executor(&self) -> Arc<dyn ShellExecutor> {
+    pub fn _get_shell_executor(&self) -> Arc<dyn ShellExecutor> {
         self.shell_executor.clone()
     }
 
-    pub fn get_os_detector(&self) -> Arc<dyn OSOperations> {
+    pub fn _get_os_detector(&self) -> Arc<dyn OSOperations> {
         self.os_detector.clone()
     }
 
-    pub fn get_path_operations(&self) -> Arc<dyn PathOperations> {
+    pub fn _get_path_operations(&self) -> Arc<dyn PathOperations> {
         self.path_operations.clone()
     }
 
@@ -96,7 +96,7 @@ impl AppConfig {
         &self.vscode_service
     }
 
-    pub fn get_yaml_parser(&self) -> Arc<YamlParser> {
+    pub fn _get_yaml_parser(&self) -> Arc<YamlParser> {
         self.yaml_parser.clone()
     }
 }
