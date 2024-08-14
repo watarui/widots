@@ -3,8 +3,9 @@ use crate::domain::link::LinkOperations;
 use crate::error::AppError;
 use crate::models::link::FileProcessResult;
 use async_trait::async_trait;
-use futures::stream::{self, StreamExt};
 use std::path::Path;
+#[cfg(test)]
+use tempfile::TempDir;
 use tokio::fs;
 
 pub struct LinkerImpl;
@@ -28,52 +29,10 @@ impl LinkerImpl {
             }
         }
 
-        fs::symlink(source, target).await?;
-
-        Ok(FileProcessResult::Linked(
-            source.to_path_buf(),
-            target.to_path_buf(),
-        ))
-    }
-
-    async fn ensure_parent_directory(&self, path: &Path) -> Result<(), AppError> {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).await?;
-        }
-        Ok(())
-    }
-
-    async fn process_entry(
-        &self,
-        entry: walkdir::DirEntry,
-        source_path: &Path,
-        target_path: &Path,
-        force: bool,
-    ) -> FileProcessResult {
-        let path = entry.path();
-        let relative_path = path.strip_prefix(source_path).unwrap();
-        let target = target_path.join(relative_path);
-
-        if path.is_file() {
-            match self.ensure_parent_directory(&target).await {
-                Ok(_) => self
-                    .create_symlink(path, &target, force)
-                    .await
-                    .unwrap_or_else(FileProcessResult::Error),
-                Err(e) => FileProcessResult::Error(e),
-            }
-        } else if path.is_dir() {
-            if !target.exists() {
-                fs::create_dir_all(&target)
-                    .await
-                    .map(|_| FileProcessResult::Created(target))
-                    .unwrap_or_else(|e| FileProcessResult::Error(AppError::Io(e)))
-            } else {
-                FileProcessResult::Skipped(target)
-            }
-        } else {
-            FileProcessResult::Skipped(path.to_path_buf())
-        }
+        Ok(match fs::symlink(source, target).await {
+            Ok(_) => FileProcessResult::Linked(source.to_path_buf(), target.to_path_buf()),
+            Err(e) => FileProcessResult::Error(AppError::Symlink(e.to_string())),
+        })
     }
 
     async fn materialize_symlink(&self, path: &Path) -> Result<FileProcessResult, AppError> {
@@ -92,19 +51,40 @@ impl LinkOperations for LinkerImpl {
         target: &Path,
         force: bool,
     ) -> Result<Vec<FileProcessResult>, AppError> {
-        let walker = walkdir::WalkDir::new(source).into_iter();
-        let filtered_entries = walker
-            .filter_entry(|e| !self.should_ignore(e.path()))
-            .filter_map(Result::ok);
+        let mut results = Vec::new();
 
-        let results = stream::iter(filtered_entries)
-            .then(|entry| async move { self.process_entry(entry, source, target, force).await })
-            .collect::<Vec<_>>()
-            .await;
+        if !target.exists() {
+            match fs::create_dir_all(target).await {
+                Ok(_) => results.push(FileProcessResult::Created(target.to_path_buf())),
+                Err(e) => return Err(AppError::Io(e)),
+            }
+        }
+
+        let mut entries = fs::read_dir(source).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            let ent = entry.path();
+
+            if self.should_ignore(&ent) {
+                continue;
+            }
+
+            let target = target.join(entry.file_name());
+
+            if ent.is_dir() {
+                match self.link_recursively(&ent, &target, force).await {
+                    Ok(mut sub_results) => results.append(&mut sub_results),
+                    Err(e) => return Err(e),
+                }
+            } else {
+                match self.create_symlink(&ent, &target, force).await {
+                    Ok(result) => results.push(result),
+                    Err(e) => return Err(e),
+                }
+            }
+        }
 
         Ok(results)
     }
-
     async fn materialize_symlinks_recursively(
         &self,
         target: &Path,
@@ -143,4 +123,49 @@ impl LinkOperations for LinkerImpl {
                     .unwrap_or(false)
             })
     }
+}
+
+#[tokio::test]
+async fn test_link_recursively() -> Result<(), AppError> {
+    let temp_dir = TempDir::new()?;
+    let source_dir = temp_dir.path().join("source");
+    let target_dir = temp_dir.path().join("target");
+
+    fs::create_dir(&source_dir).await?;
+    fs::create_dir(&target_dir).await?;
+
+    fs::write(source_dir.join("file1.txt"), "content1").await?;
+    fs::write(source_dir.join("file2.txt"), "content2").await?;
+    let dir1_path = source_dir.join("dir1");
+    if !dir1_path.exists() {
+        fs::create_dir_all(&dir1_path).await?;
+    }
+    fs::write(dir1_path.join("file3.txt"), "content3").await?;
+
+    let linker = LinkerImpl::new();
+
+    let results = linker
+        .link_recursively(&source_dir, &target_dir, false)
+        .await?;
+
+    assert_eq!(results.len(), 4);
+    for result in results {
+        match result {
+            FileProcessResult::Linked(_, _) => {}
+            FileProcessResult::Created(_) => {}
+            _ => panic!("Expected Linked result"),
+        }
+    }
+
+    assert!(fs::symlink_metadata(target_dir.join("file1.txt"))
+        .await?
+        .is_symlink());
+    assert!(fs::symlink_metadata(target_dir.join("file2.txt"))
+        .await?
+        .is_symlink());
+    assert!(fs::symlink_metadata(target_dir.join("dir1/file3.txt"))
+        .await?
+        .is_symlink());
+
+    Ok(())
 }
