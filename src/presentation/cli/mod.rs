@@ -20,8 +20,7 @@ enum Commands {
     Link(commands::link::LinkArgs),
     #[command(about = "Materialize dotfiles to destination directory")]
     Materialize(commands::materialize::MaterializeArgs),
-    // todo implement read from yaml
-    #[command(about = "Execute procedures from yaml file")]
+    #[command(about = "Execute procedures from TOML file")]
     Load(commands::load::LoadArgs),
     #[command(about = "Builds and deploys the executable to the local machine")]
     Deploy,

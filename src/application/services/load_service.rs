@@ -6,7 +6,7 @@ use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
 use crate::models::config::Config;
 use crate::models::link::FileProcessResult;
-use crate::utils::yaml::YamlOperations;
+use crate::utils::toml::TomlOperations;
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
@@ -15,7 +15,7 @@ use tempfile::NamedTempFile;
 pub struct LoadService {
     link_operations: Arc<dyn LinkOperations>,
     path_operations: Arc<dyn PathOperations>,
-    yaml_parser: Arc<dyn YamlOperations>,
+    toml_parser: Arc<dyn TomlOperations>,
     os_detector: Arc<dyn OSOperations>,
     shell_executor: Arc<dyn ShellExecutor>,
     prompter: Arc<dyn PromptOperations>,
@@ -25,7 +25,7 @@ impl LoadService {
     pub fn new(
         link_operations: Arc<dyn LinkOperations>,
         path_operations: Arc<dyn PathOperations>,
-        yaml_parser: Arc<dyn YamlOperations>,
+        toml_parser: Arc<dyn TomlOperations>,
         os_detector: Arc<dyn OSOperations>,
         shell_executor: Arc<dyn ShellExecutor>,
         prompter: Arc<dyn PromptOperations>,
@@ -33,35 +33,34 @@ impl LoadService {
         Self {
             link_operations,
             path_operations,
-            yaml_parser,
+            toml_parser,
             os_detector,
             shell_executor,
             prompter,
         }
     }
 
-    pub async fn load_yaml(
+    pub async fn load(
         &self,
-        yaml_path: &Path,
+        config_path: &Path,
         target: &Path,
         force: bool,
     ) -> Result<(), AppError> {
-        let yaml_script = self.yaml_parser.parse(yaml_path).await?;
+        let config = self.toml_parser.parse(config_path).await?;
 
-        self.evaluate_link_section(&yaml_script, target, force)
-            .await?;
-        self.evaluate_provision_section(&yaml_script).await?;
+        self.evaluate_link_section(&config, target, force).await?;
+        self.evaluate_provision_section(&config).await?;
 
         Ok(())
     }
 
     async fn evaluate_link_section(
         &self,
-        yaml_script: &Config,
+        config: &Config,
         target: &Path,
         force: bool,
     ) -> Result<(), AppError> {
-        if let Some(links) = &yaml_script.link {
+        if let Some(links) = &config.link {
             for link in links {
                 self.link_dotfiles(&link.location, target, force).await?;
             }
@@ -69,8 +68,8 @@ impl LoadService {
         Ok(())
     }
 
-    async fn evaluate_provision_section(&self, yaml_script: &Config) -> Result<(), AppError> {
-        if let Some(provisions) = &yaml_script.provision {
+    async fn evaluate_provision_section(&self, config: &Config) -> Result<(), AppError> {
+        if let Some(provisions) = &config.provision {
             for provision in provisions {
                 if provision.mode == self.os_detector.get_os().await? {
                     println!("🏃 Run provisioning... for {}", provision.mode);

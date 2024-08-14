@@ -23,7 +23,7 @@ lazy_static! {
     };
 }
 
-// pub const DEFAULT_CONFIG_PATH: &str = "~/.config/widots/config.yml";
+pub const DEFAULT_CONFIG_TOML: &str = "~/.config/widots/config.toml";
 
 pub const TEST_HOME_DIR: &str = ".widots-test";
 

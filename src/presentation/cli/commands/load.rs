@@ -1,7 +1,6 @@
-use crate::application::AppConfig;
 use crate::config::constants::TEST_HOME_DIR;
 use crate::error::AppError;
-// use crate::models::link::FileProcessResult;
+use crate::{application::AppConfig, config::constants::DEFAULT_CONFIG_TOML};
 use clap::{Args, ValueHint};
 use std::path::PathBuf;
 
@@ -9,11 +8,11 @@ use std::path::PathBuf;
 pub struct LoadArgs {
     #[arg(
     value_hint = ValueHint::FilePath,
-    help = "The path to the yaml file",
-    default_value = "~/.config/widots/config.yml",
-    value_name = "CONFIG_YAML_FILE_PATH"
+    help = "The path to the TOML file",
+    default_value = DEFAULT_CONFIG_TOML,
+    value_name = "CONFIG_TOML_FILE_PATH"
     )]
-    target_yaml: PathBuf,
+    config_toml: PathBuf,
 
     #[arg(
         short,
@@ -40,6 +39,6 @@ pub async fn execute(args: LoadArgs, config: &AppConfig) -> Result<(), AppError>
 
     config
         .get_load_service()
-        .load_yaml(&args.target_yaml, &target, args.force)
+        .load(&args.config_toml, &target, args.force)
         .await
 }

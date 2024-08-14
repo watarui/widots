@@ -8,8 +8,8 @@ pub enum AppError {
     #[error("IO error: {0}")]
     IoError(String),
 
-    #[error("YAML parse error: {0}")]
-    YamlParseError(String),
+    #[error("TOML parse error: {0}")]
+    TomlParseError(String),
 
     #[error("Shell execution error: {0}")]
     ShellExecutionError(String),
@@ -48,7 +48,7 @@ impl AppError {
     pub fn _with_context<C: std::fmt::Display>(self, context: C) -> Self {
         match self {
             AppError::IoError(e) => AppError::IoError(format!("{}: {}", context, e)),
-            AppError::YamlParseError(e) => AppError::YamlParseError(format!("{}: {}", context, e)),
+            AppError::TomlParseError(e) => AppError::TomlParseError(format!("{}: {}", context, e)),
             AppError::ShellExecutionError(e) => {
                 AppError::ShellExecutionError(format!("{}: {}", context, e))
             }

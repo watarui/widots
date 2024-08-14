@@ -12,7 +12,7 @@ use crate::infrastructure::os::OSDetector;
 use crate::infrastructure::path::PathExpander;
 use crate::infrastructure::prompt::Prompt;
 use crate::infrastructure::shell::executor::SystemShellExecutor;
-use crate::utils::yaml::YamlParser;
+use crate::utils::toml::TomlParser;
 use std::sync::Arc;
 
 pub struct AppConfig {
@@ -30,7 +30,7 @@ impl AppConfig {
         let os_detector = Arc::new(OSDetector::new());
         let fs_operations = Arc::new(FileSystemOperationsImpl::new());
         let path_operations = Arc::new(PathExpander::new());
-        let yaml_parser = Arc::new(YamlParser::new());
+        let toml_parser = Arc::new(TomlParser::new());
         let prompter = Arc::new(Prompt::new());
 
         let link_operations: Arc<dyn LinkOperations> =
@@ -45,7 +45,7 @@ impl AppConfig {
         let load_service = LoadService::new(
             link_operations.clone(),
             path_operations.clone(),
-            yaml_parser.clone(),
+            toml_parser.clone(),
             os_detector.clone(),
             shell_executor.clone(),
             prompter.clone(),
