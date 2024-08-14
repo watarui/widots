@@ -113,7 +113,16 @@ mock! {
     impl PathOperations for PathOperations {
         async fn expand_tilde(&self, path: &Path) -> Result<PathBuf, AppError>;
         async fn parse_path(&self, path: &Path) -> Result<PathBuf, AppError>;
-        // async fn get_home_dir(&self) -> Result<PathBuf, AppError>;
+        async fn get_home_dir(&self) -> Result<PathBuf, AppError>;
+    }
+}
+
+#[cfg(test)]
+mock! {
+    DeployService {}
+    #[async_trait]
+    impl DeployService for DeployService {
+        async fn execute(&self) -> Result<(), AppError>;
     }
 }
 
@@ -121,6 +130,7 @@ mock! {
 async fn test_deploy_execute() {
     let mut mock_shell = MockShellExecutor::new();
     let mut mock_path = MockPathOperations::new();
+    let mut mock_deploy_service = MockDeployService::new();
 
     mock_shell
         .expect_output()
@@ -141,8 +151,10 @@ async fn test_deploy_execute() {
         .expect_parse_path()
         .returning(|path| Ok(path.to_path_buf()));
 
-    let deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
+    mock_deploy_service.expect_execute().returning(|| Ok(()));
 
-    let result = deploy_service.execute().await;
+    let _deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
+
+    let result = mock_deploy_service.execute().await;
     assert!(result.is_ok());
 }

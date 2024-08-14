@@ -6,5 +6,5 @@ use std::path::{Path, PathBuf};
 pub trait PathOperations: Send + Sync {
     async fn expand_tilde(&self, path: &Path) -> Result<PathBuf, AppError>;
     async fn parse_path(&self, path: &Path) -> Result<PathBuf, AppError>;
-    // async fn get_home_dir(&self) -> Result<PathBuf, AppError>;
+    async fn get_home_dir(&self) -> Result<PathBuf, AppError>;
 }
