@@ -10,4 +10,4 @@ provision:
     script: |
       #!/bin/bash
       set -eux -o pipefail
-      echo "hoge"
+      pwd

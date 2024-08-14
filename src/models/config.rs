@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::path::PathBuf;
 
 #[derive(Debug, Deserialize, Default)]
-pub struct Yaml {
+pub struct Config {
     #[serde(default)]
     pub link: Option<Vec<Link>>,
     #[serde(default)]

@@ -4,8 +4,8 @@ use crate::domain::path::PathOperations;
 use crate::domain::prompt::PromptOperations;
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
+use crate::models::config::Config;
 use crate::models::link::FileProcessResult;
-use crate::models::yaml::Yaml;
 use crate::utils::yaml::YamlOperations;
 use std::io::Write;
 use std::path::Path;
@@ -57,7 +57,7 @@ impl LoadService {
 
     async fn evaluate_link_section(
         &self,
-        yaml_script: &Yaml,
+        yaml_script: &Config,
         target: &Path,
         force: bool,
     ) -> Result<(), AppError> {
@@ -69,7 +69,7 @@ impl LoadService {
         Ok(())
     }
 
-    async fn evaluate_provision_section(&self, yaml_script: &Yaml) -> Result<(), AppError> {
+    async fn evaluate_provision_section(&self, yaml_script: &Config) -> Result<(), AppError> {
         if let Some(provisions) = &yaml_script.provision {
             for provision in provisions {
                 if provision.mode == self.os_detector.get_os().await? {

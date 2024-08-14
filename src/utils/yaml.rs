@@ -1,14 +1,14 @@
-use crate::models::yaml::{Link, Provision};
-use crate::{error::AppError, models::yaml::Yaml};
+use crate::models::config::{Link, Provision};
+use crate::{error::AppError, models::config::Config};
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
-use yaml_rust2::{Yaml as Yaml2, YamlLoader};
+use yaml_rust2::{Yaml, YamlLoader};
 
 #[async_trait]
 pub trait YamlOperations: Send + Sync {
-    async fn parse(&self, path: &Path) -> Result<Yaml, AppError>;
+    async fn parse(&self, path: &Path) -> Result<Config, AppError>;
 }
 
 pub struct YamlParser;
@@ -18,13 +18,13 @@ impl YamlParser {
         Self
     }
 
-    fn parse_link(&self, yaml: &Yaml2) -> Option<Link> {
+    fn parse_link(&self, yaml: &Yaml) -> Option<Link> {
         yaml["location"].as_str().map(|location| Link {
             location: PathBuf::from(location),
         })
     }
 
-    fn parse_provision(&self, yaml: &Yaml2) -> Option<Provision> {
+    fn parse_provision(&self, yaml: &Yaml) -> Option<Provision> {
         let mode = yaml["mode"].as_str()?;
         let script = yaml["script"].as_str()?;
         Some(Provision {
@@ -33,7 +33,7 @@ impl YamlParser {
         })
     }
 
-    async fn parse_links(&self, yaml: &Yaml2) -> Option<Vec<Link>> {
+    async fn parse_links(&self, yaml: &Yaml) -> Option<Vec<Link>> {
         yaml.as_vec()?
             .iter()
             .filter_map(|yaml| self.parse_link(yaml))
@@ -41,7 +41,7 @@ impl YamlParser {
             .into()
     }
 
-    async fn parse_provisions(&self, yaml: &Yaml2) -> Option<Vec<Provision>> {
+    async fn parse_provisions(&self, yaml: &Yaml) -> Option<Vec<Provision>> {
         yaml.as_vec()?
             .iter()
             .filter_map(|yaml| self.parse_provision(yaml))
@@ -49,8 +49,8 @@ impl YamlParser {
             .into()
     }
 
-    async fn parse_yaml(&self, yaml: &Yaml2) -> Yaml {
-        Yaml {
+    async fn parse_yaml(&self, yaml: &Yaml) -> Config {
+        Config {
             link: self.parse_links(&yaml["link"]).await,
             provision: self.parse_provisions(&yaml["provision"]).await,
         }
@@ -59,7 +59,7 @@ impl YamlParser {
 
 #[async_trait]
 impl YamlOperations for YamlParser {
-    async fn parse(&self, path: &Path) -> Result<Yaml, AppError> {
+    async fn parse(&self, path: &Path) -> Result<Config, AppError> {
         let mut file = File::open(path)
             .await
             .map_err(|e| AppError::IoError(e.to_string()))?;
