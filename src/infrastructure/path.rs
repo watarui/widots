@@ -6,6 +6,12 @@ use std::path::{Path, PathBuf};
 
 pub struct PathExpander;
 
+impl Default for PathExpander {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PathExpander {
     pub fn new() -> Self {
         PathExpander

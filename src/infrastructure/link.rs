@@ -10,6 +10,12 @@ use tokio::fs;
 
 pub struct LinkerImpl;
 
+impl Default for LinkerImpl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LinkerImpl {
     pub fn new() -> Self {
         Self

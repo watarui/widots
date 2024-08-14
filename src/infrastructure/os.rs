@@ -4,6 +4,12 @@ use async_trait::async_trait;
 
 pub struct OSDetector;
 
+impl Default for OSDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OSDetector {
     pub fn new() -> Self {
         Self

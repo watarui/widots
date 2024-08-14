@@ -14,6 +14,12 @@ pub trait FileSystemOperations: Send + Sync {
 
 pub struct FileSystemOperationsImpl;
 
+impl Default for FileSystemOperationsImpl {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FileSystemOperationsImpl {
     pub fn new() -> Self {
         Self

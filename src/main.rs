@@ -1,11 +1,11 @@
-mod application;
-mod constants;
-mod domain;
-mod error;
-mod infrastructure;
-mod models;
-mod presentation;
-mod utils;
+pub mod application;
+pub mod constants;
+pub mod domain;
+pub mod error;
+pub mod infrastructure;
+pub mod models;
+pub mod presentation;
+pub mod utils;
 
 use clap::Parser;
 use error::AppError;

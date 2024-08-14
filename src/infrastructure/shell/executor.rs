@@ -7,6 +7,12 @@ use tokio::process::Command;
 
 pub struct SystemShellExecutor;
 
+impl Default for SystemShellExecutor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SystemShellExecutor {
     pub fn new() -> Self {
         Self

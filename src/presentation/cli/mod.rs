@@ -5,7 +5,10 @@ use clap::{ArgAction, Parser, Subcommand};
 mod commands;
 
 #[derive(Parser)]
-#[clap(author, version, about, long_about = None)]
+#[command(name = "widots")]
+#[command(author, version, about, long_about = None)]
+#[command(color = clap::ColorChoice::Always)]
+#[command(help_expected = true)]
 pub struct Args {
     #[clap(subcommand)]
     command: Commands,

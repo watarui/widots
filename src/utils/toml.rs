@@ -15,6 +15,12 @@ pub trait TomlOperations: Send + Sync {
 
 pub struct TomlParser;
 
+impl Default for TomlParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TomlParser {
     pub fn new() -> Self {
         Self

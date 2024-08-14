@@ -14,6 +14,12 @@ use inquire::Confirm;
 
 pub struct Prompt;
 
+impl Default for Prompt {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Prompt {
     pub fn new() -> Self {
         Prompt
