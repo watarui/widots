@@ -1,12 +1,12 @@
 use crate::domain::link::LinkOperations;
 use crate::domain::os::OSOperations;
 use crate::domain::path::PathOperations;
+use crate::domain::prompt::PromptOperations;
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
 use crate::models::link::FileProcessResult;
 use crate::models::yaml::Yaml;
 use crate::utils::yaml::YamlOperations;
-use inquire::Confirm;
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
@@ -18,6 +18,7 @@ pub struct LoadService {
     yaml_parser: Arc<dyn YamlOperations>,
     os_detector: Arc<dyn OSOperations>,
     shell_executor: Arc<dyn ShellExecutor>,
+    prompter: Arc<dyn PromptOperations>,
 }
 
 impl LoadService {
@@ -27,6 +28,7 @@ impl LoadService {
         yaml_parser: Arc<dyn YamlOperations>,
         os_detector: Arc<dyn OSOperations>,
         shell_executor: Arc<dyn ShellExecutor>,
+        prompter: Arc<dyn PromptOperations>,
     ) -> Self {
         Self {
             link_operations,
@@ -34,6 +36,7 @@ impl LoadService {
             yaml_parser,
             os_detector,
             shell_executor,
+            prompter,
         }
     }
 
@@ -99,11 +102,14 @@ impl LoadService {
         let source = self.path_operations.parse_path(source).await?;
         let target = self.path_operations.parse_path(target).await?;
 
-        let ans = self.confirm_action(&format!(
-            "This will link files from {:?} to {:?}. Do you want to continue?",
-            source.display(),
-            target.display()
-        ))?;
+        let ans = self
+            .prompter
+            .confirm_action(&format!(
+                "This will link files from {:?} to {:?}. Do you want to continue?",
+                source.display(),
+                target.display()
+            ))
+            .await?;
         if !ans {
             return Ok(vec![]);
         }
@@ -111,12 +117,5 @@ impl LoadService {
         self.link_operations
             .link_recursively(&source, &target, force)
             .await
-    }
-
-    fn confirm_action(&self, message: &str) -> Result<bool, AppError> {
-        Confirm::new(message)
-            .with_default(false)
-            .prompt()
-            .map_err(|e| AppError::IoError(e.to_string()))
     }
 }

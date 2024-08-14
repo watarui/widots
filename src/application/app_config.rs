@@ -11,6 +11,7 @@ use crate::infrastructure::fs::FileSystemOperationsImpl;
 use crate::infrastructure::link::LinkerImpl;
 use crate::infrastructure::os::OSDetector;
 use crate::infrastructure::path::PathExpander;
+use crate::infrastructure::prompt::Prompt;
 use crate::infrastructure::shell::executor::SystemShellExecutor;
 use crate::utils::yaml::YamlParser;
 use std::sync::Arc;
@@ -34,11 +35,16 @@ impl AppConfig {
         let fs_operations = Arc::new(FileSystemOperationsImpl::new());
         let path_operations = Arc::new(PathExpander::new());
         let yaml_parser = Arc::new(YamlParser::new());
+        let prompter = Arc::new(Prompt::new());
 
         let link_operations: Arc<dyn LinkOperations> =
             Arc::new(LinkerImpl::new(path_operations.clone()));
 
-        let link_service = LinkService::new(link_operations.clone(), path_operations.clone());
+        let link_service = LinkService::new(
+            link_operations.clone(),
+            path_operations.clone(),
+            prompter.clone(),
+        );
 
         let load_service = LoadService::new(
             link_operations.clone(),
@@ -46,6 +52,7 @@ impl AppConfig {
             yaml_parser.clone(),
             os_detector.clone(),
             shell_executor.clone(),
+            prompter.clone(),
         );
 
         let deploy_service = DeployService::new(shell_executor.clone(), path_operations.clone());

@@ -1,24 +1,27 @@
 use crate::domain::link::LinkOperations;
 use crate::domain::path::PathOperations;
+use crate::domain::prompt::PromptOperations;
 use crate::error::AppError;
 use crate::models::link::FileProcessResult;
-use inquire::Confirm;
 use std::path::Path;
 use std::sync::Arc;
 
 pub struct LinkService {
     link_operations: Arc<dyn LinkOperations>,
     path_operations: Arc<dyn PathOperations>,
+    prompter: Arc<dyn PromptOperations>,
 }
 
 impl LinkService {
     pub fn new(
         link_operations: Arc<dyn LinkOperations>,
         path_operations: Arc<dyn PathOperations>,
+        prompter: Arc<dyn PromptOperations>,
     ) -> Self {
         Self {
             link_operations,
             path_operations,
+            prompter,
         }
     }
 
@@ -31,11 +34,14 @@ impl LinkService {
         let source = self.path_operations.parse_path(source).await?;
         let target = self.path_operations.parse_path(target).await?;
 
-        let ans = self.confirm_action(&format!(
-            "This will link files from {:?} to {:?}. Do you want to continue?",
-            source.display(),
-            target.display()
-        ))?;
+        let ans = self
+            .prompter
+            .confirm_action(&format!(
+                "This will link files from {:?} to {:?}. Do you want to continue?",
+                source.display(),
+                target.display()
+            ))
+            .await?;
         if !ans {
             return Ok(vec![]);
         }
@@ -51,22 +57,19 @@ impl LinkService {
     ) -> Result<Vec<FileProcessResult>, AppError> {
         let target = self.path_operations.parse_path(target).await?;
 
-        if !self.confirm_action(&format!(
-            "This will materialize symlinks in {:?}. Do you want to continue?",
-            target.display()
-        ))? {
+        if !self
+            .prompter
+            .confirm_action(&format!(
+                "This will materialize symlinks in {:?}. Do you want to continue?",
+                target.display()
+            ))
+            .await?
+        {
             return Ok(vec![]);
         }
 
         self.link_operations
             .materialize_symlinks_recursively(&target)
             .await
-    }
-
-    fn confirm_action(&self, message: &str) -> Result<bool, AppError> {
-        Confirm::new(message)
-            .with_default(false)
-            .prompt()
-            .map_err(|e| AppError::IoError(e.to_string()))
     }
 }
