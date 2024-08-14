@@ -25,7 +25,6 @@ clap = { version = "4.5.13", features = [
   "wrap_help",
   "string",
 ] }
-config = "0.14.0"
 dirs = "5.0.1"
 fern = { version = "0.6.2", features = ["chrono", "colored"] }
 futures = "0.3.30"

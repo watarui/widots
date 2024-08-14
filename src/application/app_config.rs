@@ -4,7 +4,6 @@ use crate::application::services::fish_service::FishService;
 use crate::application::services::link_service::LinkService;
 use crate::application::services::load_service::LoadService;
 use crate::application::services::vscode_service::VSCodeService;
-use crate::config::Config;
 use crate::domain::link::LinkOperations;
 use crate::error::AppError;
 use crate::infrastructure::fs::FileSystemOperationsImpl;
@@ -17,7 +16,6 @@ use crate::utils::yaml::YamlParser;
 use std::sync::Arc;
 
 pub struct AppConfig {
-    pub _config: Config,
     pub link_service: LinkService,
     pub load_service: LoadService,
     pub deploy_service: DeployService,
@@ -28,8 +26,6 @@ pub struct AppConfig {
 
 impl AppConfig {
     pub async fn new() -> Result<Self, AppError> {
-        let config = Config::load().map_err(|e| AppError::ConfigError(e.to_string()))?;
-
         let shell_executor = Arc::new(SystemShellExecutor::new());
         let os_detector = Arc::new(OSDetector::new());
         let fs_operations = Arc::new(FileSystemOperationsImpl::new());
@@ -56,8 +52,7 @@ impl AppConfig {
         );
 
         let deploy_service = DeployService::new(shell_executor.clone(), path_operations.clone());
-        let brew_service =
-            BrewService::new(shell_executor.clone(), fs_operations.clone(), &config.brew);
+        let brew_service = BrewService::new(shell_executor.clone(), fs_operations.clone());
 
         let fish_service = FishService::new(
             shell_executor.clone(),
@@ -65,11 +60,9 @@ impl AppConfig {
             os_detector.clone(),
         );
 
-        let vscode_service =
-            VSCodeService::new(shell_executor.clone(), fs_operations.clone(), &config.paths);
+        let vscode_service = VSCodeService::new(shell_executor.clone(), fs_operations.clone());
 
         Ok(Self {
-            _config: config,
             link_service,
             load_service,
             deploy_service,

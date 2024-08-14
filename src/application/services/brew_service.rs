@@ -1,25 +1,23 @@
-use crate::config::BrewConfig;
+use crate::config::constants::{BREW_CASK_FORMULA_FILENAME, BREW_FORMULA_FILENAME, RESOURCES_DIR};
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
 use crate::infrastructure::fs::FileSystemOperations;
+use std::path::Path;
 use std::sync::Arc;
 
 pub struct BrewService {
     shell_executor: Arc<dyn ShellExecutor>,
     fs_operations: Arc<dyn FileSystemOperations>,
-    config: BrewConfig,
 }
 
 impl BrewService {
     pub fn new(
         shell_executor: Arc<dyn ShellExecutor>,
         fs_operations: Arc<dyn FileSystemOperations>,
-        config: &BrewConfig,
     ) -> Self {
         Self {
             shell_executor,
             fs_operations,
-            config: config.clone(),
         }
     }
 
@@ -30,20 +28,16 @@ impl BrewService {
     }
 
     pub async fn import(&self) -> Result<(), AppError> {
-        let formulas = self
-            .fs_operations
-            .read_lines(&self.config.formula_file)
-            .await?;
+        let import_path = Path::new(RESOURCES_DIR).join(BREW_FORMULA_FILENAME);
+        let formulas = self.fs_operations.read_lines(import_path.as_path()).await?;
         for formula in formulas {
             self.shell_executor
                 .execute(&format!("brew install {}", formula))
                 .await?;
         }
 
-        let casks = self
-            .fs_operations
-            .read_lines(&self.config.cask_file)
-            .await?;
+        let import_path = Path::new(RESOURCES_DIR).join(BREW_CASK_FORMULA_FILENAME);
+        let casks = self.fs_operations.read_lines(import_path.as_path()).await?;
         for cask in casks {
             self.shell_executor
                 .execute(&format!("brew install --cask {}", cask))
@@ -54,10 +48,11 @@ impl BrewService {
     }
 
     pub async fn export(&self) -> Result<(), AppError> {
+        let export_path = Path::new(RESOURCES_DIR).join(BREW_FORMULA_FILENAME);
         let formulas = self.shell_executor.execute("brew leaves").await?;
         self.fs_operations
             .write_lines(
-                &self.config.formula_file,
+                export_path.as_path(),
                 &formulas
                     .lines()
                     .map(|formula| formula.to_string())
@@ -65,10 +60,11 @@ impl BrewService {
             )
             .await?;
 
+        let export_path = Path::new(RESOURCES_DIR).join(BREW_CASK_FORMULA_FILENAME);
         let casks = self.shell_executor.execute("brew list --cask").await?;
         self.fs_operations
             .write_lines(
-                &self.config.cask_file,
+                export_path.as_path(),
                 &casks
                     .lines()
                     .map(|cask| cask.to_string())

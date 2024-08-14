@@ -27,10 +27,11 @@ lazy_static! {
 
 pub const TEST_HOME_DIR: &str = ".widots-test";
 
-// pub const BREW_FORMULA_FILENAME: &str = "brew_formulas.txt";
-// pub const BREW_CASK_FORMULA_FILENAME: &str = "brew_casks.txt";
+pub const BREW_FORMULA_FILENAME: &str = "brew_formulas.txt";
+pub const BREW_CASK_FORMULA_FILENAME: &str = "brew_casks.txt";
 
-// pub const VSCODE_EXTENSIONS_FILENAME: &str = "vscode_extensions.txt";
+pub const RESOURCES_DIR: &str = "resources";
+pub const VSCODE_EXTENSIONS_FILENAME: &str = "vscode_extensions.txt";
 
 pub const DEPLOY_SOURCE_PATH: &str = "target/release/widots";
 pub const DEPLOY_DESTINATION_PATH: &str = "/usr/local/bin/widots";

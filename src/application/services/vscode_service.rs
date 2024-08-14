@@ -1,25 +1,23 @@
-use crate::config::PathConfig;
+use crate::config::constants::{RESOURCES_DIR, VSCODE_EXTENSIONS_FILENAME};
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
 use crate::infrastructure::fs::FileSystemOperations;
+use std::path::Path;
 use std::sync::Arc;
 
 pub struct VSCodeService {
     shell_executor: Arc<dyn ShellExecutor>,
     fs_operations: Arc<dyn FileSystemOperations>,
-    path_config: PathConfig,
 }
 
 impl VSCodeService {
     pub fn new(
         shell_executor: Arc<dyn ShellExecutor>,
         fs_operations: Arc<dyn FileSystemOperations>,
-        path_config: &PathConfig,
     ) -> Self {
         Self {
             shell_executor,
             fs_operations,
-            path_config: path_config.clone(),
         }
     }
 
@@ -28,7 +26,7 @@ impl VSCodeService {
             .shell_executor
             .execute("code --list-extensions")
             .await?;
-        let export_path = self.path_config.backups.join("vscode_extensions.txt");
+        let export_path = Path::new(RESOURCES_DIR).join(VSCODE_EXTENSIONS_FILENAME);
         self.fs_operations
             .write_lines(
                 &export_path,
@@ -42,7 +40,7 @@ impl VSCodeService {
     }
 
     pub async fn import_extensions(&self) -> Result<(), AppError> {
-        let import_path = self.path_config.backups.join("vscode_extensions.txt");
+        let import_path = Path::new(RESOURCES_DIR).join(VSCODE_EXTENSIONS_FILENAME);
         let extensions = self.fs_operations.read_lines(&import_path).await?;
         for extension in extensions {
             self.shell_executor

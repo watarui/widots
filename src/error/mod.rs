@@ -11,9 +11,6 @@ pub enum AppError {
     #[error("YAML parse error: {0}")]
     YamlParseError(String),
 
-    #[error("Configuration error: {0}")]
-    ConfigError(String),
-
     #[error("Shell execution error: {0}")]
     ShellExecutionError(String),
 
@@ -52,7 +49,6 @@ impl AppError {
         match self {
             AppError::IoError(e) => AppError::IoError(format!("{}: {}", context, e)),
             AppError::YamlParseError(e) => AppError::YamlParseError(format!("{}: {}", context, e)),
-            AppError::ConfigError(e) => AppError::ConfigError(format!("{}: {}", context, e)),
             AppError::ShellExecutionError(e) => {
                 AppError::ShellExecutionError(format!("{}: {}", context, e))
             }
