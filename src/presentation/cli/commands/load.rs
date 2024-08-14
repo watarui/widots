@@ -30,7 +30,7 @@ pub struct LoadArgs {
 }
 
 pub async fn execute(args: LoadArgs, config: &AppConfig) -> Result<(), AppError> {
-    let home = dirs::home_dir().unwrap();
+    let home = dirs::home_dir().ok_or(AppError::DirectoryNotFound)?;
     let target = if args.test {
         home.join(TEST_HOME_DIR)
     } else {

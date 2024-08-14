@@ -10,14 +10,12 @@ use std::sync::Arc;
 use tokio::fs;
 
 pub struct LinkerImpl {
-    _path_operations: Arc<dyn PathOperations>,
+    path_operations: Arc<dyn PathOperations>,
 }
 
 impl LinkerImpl {
     pub fn new(path_operations: Arc<dyn PathOperations>) -> Self {
-        Self {
-            _path_operations: path_operations,
-        }
+        Self { path_operations }
     }
 
     async fn create_symlink(
@@ -28,17 +26,13 @@ impl LinkerImpl {
     ) -> Result<FileProcessResult, AppError> {
         if target.exists() {
             if force {
-                fs::remove_file(target)
-                    .await
-                    .map_err(|e| AppError::IoError(e.to_string()))?;
+                fs::remove_file(target).await?;
             } else {
                 return Ok(FileProcessResult::Skipped(target.to_path_buf()));
             }
         }
 
-        fs::symlink(source, target)
-            .await
-            .map_err(|e| AppError::IoError(e.to_string()))?;
+        fs::symlink(source, target).await?;
 
         Ok(FileProcessResult::Linked(
             source.to_path_buf(),
@@ -48,9 +42,7 @@ impl LinkerImpl {
 
     async fn ensure_parent_directory(&self, path: &Path) -> Result<(), AppError> {
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| AppError::IoError(e.to_string()))?;
+            fs::create_dir_all(parent).await?;
         }
         Ok(())
     }
@@ -79,7 +71,7 @@ impl LinkerImpl {
                 fs::create_dir_all(&target)
                     .await
                     .map(|_| FileProcessResult::Created(target))
-                    .unwrap_or_else(|e| FileProcessResult::Error(AppError::IoError(e.to_string())))
+                    .unwrap_or_else(|e| FileProcessResult::Error(AppError::Io(e)))
             } else {
                 FileProcessResult::Skipped(target)
             }
@@ -89,15 +81,9 @@ impl LinkerImpl {
     }
 
     async fn materialize_symlink(&self, path: &Path) -> Result<FileProcessResult, AppError> {
-        let target = fs::read_link(path)
-            .await
-            .map_err(|e| AppError::LinkError(e.to_string()))?;
-        fs::remove_file(path)
-            .await
-            .map_err(|e| AppError::IoError(e.to_string()))?;
-        fs::copy(&target, path)
-            .await
-            .map_err(|e| AppError::IoError(e.to_string()))?;
+        let target = fs::read_link(path).await?;
+        fs::remove_file(path).await?;
+        fs::copy(&target, path).await?;
         Ok(FileProcessResult::Materialized(path.to_path_buf(), target))
     }
 }
@@ -131,15 +117,9 @@ impl LinkOperations for LinkerImpl {
         let mut dirs = vec![target.to_path_buf()];
 
         while let Some(dir) = dirs.pop() {
-            let mut entries = fs::read_dir(&dir)
-                .await
-                .map_err(|e| AppError::IoError(e.to_string()))?;
+            let mut entries = fs::read_dir(&dir).await?;
 
-            while let Some(entry) = entries
-                .next_entry()
-                .await
-                .map_err(|e| AppError::IoError(e.to_string()))?
-            {
+            while let Some(entry) = entries.next_entry().await? {
                 let path = entry.path();
 
                 if path.is_dir() {

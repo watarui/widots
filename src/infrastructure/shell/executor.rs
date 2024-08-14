@@ -16,17 +16,12 @@ impl SystemShellExecutor {
 #[async_trait]
 impl ShellExecutor for SystemShellExecutor {
     async fn execute(&self, command: &str) -> Result<String, AppError> {
-        let output = Command::new("sh")
-            .arg("-c")
-            .arg(command)
-            .output()
-            .await
-            .map_err(|e| AppError::ShellExecutionError(e.to_string()))?;
+        let output = Command::new("sh").arg("-c").arg(command).output().await?;
 
         if output.status.success() {
             Ok(String::from_utf8_lossy(&output.stdout).to_string())
         } else {
-            Err(AppError::ShellExecutionError(
+            Err(AppError::ShellExecution(
                 String::from_utf8_lossy(&output.stderr).to_string(),
             ))
         }
@@ -38,7 +33,7 @@ impl ShellExecutor for SystemShellExecutor {
             .arg(command)
             .output()
             .await
-            .map_err(|e| AppError::ShellExecutionError(e.to_string()))
+            .map_err(AppError::Io)
     }
 
     fn stderr(&self, output: &Output) -> String {

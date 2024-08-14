@@ -2,15 +2,23 @@ use crate::config::constants::{BREW_CASK_FORMULA_FILENAME, BREW_FORMULA_FILENAME
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
 use crate::infrastructure::fs::FileSystemOperations;
+use async_trait::async_trait;
 use std::path::Path;
 use std::sync::Arc;
 
-pub struct BrewService {
+#[async_trait]
+pub trait BrewService: Send + Sync {
+    async fn install(&self) -> Result<(), AppError>;
+    async fn import(&self) -> Result<(), AppError>;
+    async fn export(&self) -> Result<(), AppError>;
+}
+
+pub struct BrewServiceImpl {
     shell_executor: Arc<dyn ShellExecutor>,
     fs_operations: Arc<dyn FileSystemOperations>,
 }
 
-impl BrewService {
+impl BrewServiceImpl {
     pub fn new(
         shell_executor: Arc<dyn ShellExecutor>,
         fs_operations: Arc<dyn FileSystemOperations>,
@@ -20,14 +28,17 @@ impl BrewService {
             fs_operations,
         }
     }
+}
 
-    pub async fn install(&self) -> Result<(), AppError> {
+#[async_trait]
+impl BrewService for BrewServiceImpl {
+    async fn install(&self) -> Result<(), AppError> {
         let install_script = "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"";
         self.shell_executor.execute(install_script).await?;
         Ok(())
     }
 
-    pub async fn import(&self) -> Result<(), AppError> {
+    async fn import(&self) -> Result<(), AppError> {
         let import_path = Path::new(RESOURCES_DIR).join(BREW_FORMULA_FILENAME);
         let formulas = self.fs_operations.read_lines(import_path.as_path()).await?;
         for formula in formulas {
@@ -47,7 +58,7 @@ impl BrewService {
         Ok(())
     }
 
-    pub async fn export(&self) -> Result<(), AppError> {
+    async fn export(&self) -> Result<(), AppError> {
         let export_path = Path::new(RESOURCES_DIR).join(BREW_FORMULA_FILENAME);
         let formulas = self.shell_executor.execute("brew leaves").await?;
         self.fs_operations

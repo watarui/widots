@@ -28,7 +28,7 @@ pub async fn execute(args: MaterializeArgs, config: &AppConfig) -> Result<(), Ap
             FileProcessResult::Error(e) => {
                 println!("Error: {:?}", e);
             }
-            _ => {}
+            _ => {} // Other variants should not occur during materialization
         }
     }
 

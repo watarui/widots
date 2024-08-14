@@ -24,8 +24,9 @@ enum Commands {
     Load(commands::load::LoadArgs),
     #[command(about = "Builds and deploys the executable to the local machine")]
     Deploy,
+    #[command(about = "Manage Homebrew packages")]
     Brew(commands::brew::BrewArgs),
-    #[command(about = "Excuting fish shell operations")]
+    #[command(about = "Executing fish shell operations")]
     Fish(commands::fish::FishArgs),
     #[command(about = "Manage VSCode extensions")]
     VSCode(commands::vscode::VSCodeArgs),

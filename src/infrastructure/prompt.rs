@@ -1,4 +1,5 @@
-use crate::{domain::prompt::PromptOperations, error::AppError};
+use crate::domain::prompt::PromptOperations;
+use crate::error::AppError;
 use async_trait::async_trait;
 use inquire::Confirm;
 
@@ -16,6 +17,6 @@ impl PromptOperations for Prompt {
         Confirm::new(message)
             .with_default(false)
             .prompt()
-            .map_err(|e| AppError::IoError(e.to_string()))
+            .map_err(|e| AppError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))
     }
 }

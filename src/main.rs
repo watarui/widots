@@ -8,10 +8,10 @@ mod presentation;
 mod utils;
 
 use clap::Parser;
+use error::AppError;
 use log::LevelFilter;
 
 use crate::application::AppConfig;
-use crate::error::AppError;
 use crate::presentation::cli::Args;
 use crate::utils::logger;
 
@@ -25,7 +25,7 @@ async fn main() -> Result<(), AppError> {
         _ => LevelFilter::Trace,
     };
 
-    logger::setup_logger(log_level).map_err(|e| AppError::LoggerError(e.to_string()))?;
+    logger::setup_logger(log_level)?;
 
     let config = AppConfig::new().await?;
 

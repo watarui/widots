@@ -7,12 +7,18 @@ use crate::error::AppError;
 use crate::models::config::Config;
 use crate::models::link::FileProcessResult;
 use crate::utils::toml::TomlOperations;
-use std::io::Write;
+use async_trait::async_trait;
 use std::path::Path;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
+use tokio::io::AsyncWriteExt;
 
-pub struct LoadService {
+#[async_trait]
+pub trait LoadService: Send + Sync {
+    async fn load(&self, config_path: &Path, target: &Path, force: bool) -> Result<(), AppError>;
+}
+
+pub struct LoadServiceImpl {
     link_operations: Arc<dyn LinkOperations>,
     path_operations: Arc<dyn PathOperations>,
     toml_parser: Arc<dyn TomlOperations>,
@@ -21,7 +27,7 @@ pub struct LoadService {
     prompter: Arc<dyn PromptOperations>,
 }
 
-impl LoadService {
+impl LoadServiceImpl {
     pub fn new(
         link_operations: Arc<dyn LinkOperations>,
         path_operations: Arc<dyn PathOperations>,
@@ -38,20 +44,6 @@ impl LoadService {
             shell_executor,
             prompter,
         }
-    }
-
-    pub async fn load(
-        &self,
-        config_path: &Path,
-        target: &Path,
-        force: bool,
-    ) -> Result<(), AppError> {
-        let config = self.toml_parser.parse(config_path).await?;
-
-        self.evaluate_link_section(&config, target, force).await?;
-        self.evaluate_provision_section(&config).await?;
-
-        Ok(())
     }
 
     async fn evaluate_link_section(
@@ -84,7 +76,9 @@ impl LoadService {
     async fn run_bash_script(&self, script: &str) -> Result<(), AppError> {
         let mut temp_file = NamedTempFile::new().map_err(|e| AppError::IoError(e.to_string()))?;
         temp_file
+            .as_file_mut()
             .write_all(script.as_bytes())
+            .await
             .map_err(|e| AppError::IoError(e.to_string()))?;
 
         let command = format!("bash {}", temp_file.path().display());
@@ -92,7 +86,7 @@ impl LoadService {
         Ok(())
     }
 
-    pub async fn link_dotfiles(
+    async fn link_dotfiles(
         &self,
         source: &Path,
         target: &Path,
@@ -116,5 +110,17 @@ impl LoadService {
         self.link_operations
             .link_recursively(&source, &target, force)
             .await
+    }
+}
+
+#[async_trait]
+impl LoadService for LoadServiceImpl {
+    async fn load(&self, config_path: &Path, target: &Path, force: bool) -> Result<(), AppError> {
+        let config = self.toml_parser.parse(config_path).await?;
+
+        self.evaluate_link_section(&config, target, force).await?;
+        self.evaluate_provision_section(&config).await?;
+
+        Ok(())
     }
 }

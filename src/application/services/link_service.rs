@@ -3,16 +3,29 @@ use crate::domain::path::PathOperations;
 use crate::domain::prompt::PromptOperations;
 use crate::error::AppError;
 use crate::models::link::FileProcessResult;
+use async_trait::async_trait;
 use std::path::Path;
 use std::sync::Arc;
 
-pub struct LinkService {
+#[async_trait]
+pub trait LinkService: Send + Sync {
+    async fn link_dotfiles(
+        &self,
+        source: &Path,
+        target: &Path,
+        force: bool,
+    ) -> Result<Vec<FileProcessResult>, AppError>;
+    async fn materialize_dotfiles(&self, target: &Path)
+        -> Result<Vec<FileProcessResult>, AppError>;
+}
+
+pub struct LinkServiceImpl {
     link_operations: Arc<dyn LinkOperations>,
     path_operations: Arc<dyn PathOperations>,
     prompter: Arc<dyn PromptOperations>,
 }
 
-impl LinkService {
+impl LinkServiceImpl {
     pub fn new(
         link_operations: Arc<dyn LinkOperations>,
         path_operations: Arc<dyn PathOperations>,
@@ -24,8 +37,11 @@ impl LinkService {
             prompter,
         }
     }
+}
 
-    pub async fn link_dotfiles(
+#[async_trait]
+impl LinkService for LinkServiceImpl {
+    async fn link_dotfiles(
         &self,
         source: &Path,
         target: &Path,
@@ -51,7 +67,7 @@ impl LinkService {
             .await
     }
 
-    pub async fn materialize_dotfiles(
+    async fn materialize_dotfiles(
         &self,
         target: &Path,
     ) -> Result<Vec<FileProcessResult>, AppError> {

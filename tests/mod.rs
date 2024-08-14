@@ -1,0 +1,14 @@
+mod brew_service_tests;
+mod config_tests;
+mod deploy_service_tests;
+mod fish_service_tests;
+mod fs_tests;
+mod link_service_tests;
+mod link_tests;
+mod load_service_tests;
+mod os_tests;
+mod path_tests;
+mod prompt_tests;
+mod shell_tests;
+mod toml_tests;
+mod vscode_service_tests;

@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use tokio::fs;
 
 use crate::config::constants::{
@@ -10,12 +11,17 @@ use crate::error::AppError;
 use std::path::Path;
 use std::sync::Arc;
 
-pub struct DeployService {
+#[async_trait]
+pub trait DeployService: Send + Sync {
+    async fn execute(&self) -> Result<(), AppError>;
+}
+
+pub struct DeployServiceImpl {
     shell_executor: Arc<dyn ShellExecutor>,
     path_expander: Arc<dyn PathOperations>,
 }
 
-impl DeployService {
+impl DeployServiceImpl {
     pub fn new(
         shell_executor: Arc<dyn ShellExecutor>,
         path_expander: Arc<dyn PathOperations>,
@@ -24,26 +30,6 @@ impl DeployService {
             shell_executor,
             path_expander,
         }
-    }
-
-    pub async fn execute(&self) -> Result<(), AppError> {
-        println!("Building the project in release mode...");
-        let output = self.shell_executor.output("cargo build --release").await?;
-        if !output.status.success() {
-            return Err(AppError::DeploymentError(
-                self.shell_executor.stderr(&output),
-            ));
-        }
-
-        println!("Deploying the executable...");
-        self.deploy_executable().await?;
-        println!("Deployment successful!");
-
-        println!("Locating fish shell command completion files...");
-        self.locate_fish_completions().await?;
-        println!("Locate successful!");
-
-        Ok(())
     }
 
     async fn deploy_executable(&self) -> Result<(), AppError> {
@@ -70,15 +56,32 @@ impl DeployService {
             .path_expander
             .parse_path(Path::new(FISH_COMPLETIONS_TARGET_DIR))
             .await?;
-        fs::create_dir_all(&target_dir)
-            .await
-            .map_err(|e| AppError::IoError(e.to_string()))?;
+        fs::create_dir_all(&target_dir).await?;
 
         let source = Path::new(FISH_COMPLETIONS_SOURCE_PATH);
         let target = target_dir.join(FISH_COMPLETIONS_FILENAME);
-        fs::copy(&source, &target)
-            .await
-            .map_err(|e| AppError::IoError(e.to_string()))?;
+        fs::copy(&source, &target).await?;
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl DeployService for DeployServiceImpl {
+    async fn execute(&self) -> Result<(), AppError> {
+        println!("Building the project in release mode...");
+        let output = self.shell_executor.output("cargo build --release").await?;
+        if !output.status.success() {
+            return Err(AppError::Deployment(self.shell_executor.stderr(&output)));
+        }
+
+        println!("Deploying the executable...");
+        self.deploy_executable().await?;
+        println!("Deployment successful!");
+
+        println!("Locating fish shell command completion files...");
+        self.locate_fish_completions().await?;
+        println!("Locate successful!");
 
         Ok(())
     }

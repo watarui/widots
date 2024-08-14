@@ -29,7 +29,7 @@ pub struct LinkArgs {
 }
 
 pub async fn execute(args: LinkArgs, config: &AppConfig) -> Result<(), AppError> {
-    let home = dirs::home_dir().unwrap();
+    let home = dirs::home_dir().ok_or(AppError::DirectoryNotFound)?;
     let target = if args.test {
         home.join(TEST_HOME_DIR)
     } else {
@@ -55,7 +55,7 @@ pub async fn execute(args: LinkArgs, config: &AppConfig) -> Result<(), AppError>
             FileProcessResult::Error(e) => {
                 println!("Error: {:?}", e);
             }
-            _ => {}
+            FileProcessResult::Materialized(_, _) => {} // This should not occur during linking
         }
     }
 

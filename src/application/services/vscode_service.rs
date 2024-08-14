@@ -1,16 +1,25 @@
+// src/application/services/vscode_service.rs
 use crate::config::constants::{RESOURCES_DIR, VSCODE_EXTENSIONS_FILENAME};
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
 use crate::infrastructure::fs::FileSystemOperations;
+use async_trait::async_trait;
 use std::path::Path;
 use std::sync::Arc;
 
-pub struct VSCodeService {
+#[async_trait]
+pub trait VSCodeService: Send + Sync {
+    async fn export_extensions(&self) -> Result<(), AppError>;
+    async fn import_extensions(&self) -> Result<(), AppError>;
+    async fn ensure_code_command(&self) -> Result<(), AppError>;
+}
+
+pub struct VSCodeServiceImpl {
     shell_executor: Arc<dyn ShellExecutor>,
     fs_operations: Arc<dyn FileSystemOperations>,
 }
 
-impl VSCodeService {
+impl VSCodeServiceImpl {
     pub fn new(
         shell_executor: Arc<dyn ShellExecutor>,
         fs_operations: Arc<dyn FileSystemOperations>,
@@ -20,8 +29,11 @@ impl VSCodeService {
             fs_operations,
         }
     }
+}
 
-    pub async fn export_extensions(&self) -> Result<(), AppError> {
+#[async_trait]
+impl VSCodeService for VSCodeServiceImpl {
+    async fn export_extensions(&self) -> Result<(), AppError> {
         let extensions = self
             .shell_executor
             .execute("code --list-extensions")
@@ -39,7 +51,7 @@ impl VSCodeService {
         Ok(())
     }
 
-    pub async fn import_extensions(&self) -> Result<(), AppError> {
+    async fn import_extensions(&self) -> Result<(), AppError> {
         let import_path = Path::new(RESOURCES_DIR).join(VSCODE_EXTENSIONS_FILENAME);
         let extensions = self.fs_operations.read_lines(&import_path).await?;
         for extension in extensions {
@@ -50,7 +62,7 @@ impl VSCodeService {
         Ok(())
     }
 
-    pub async fn ensure_code_command(&self) -> Result<(), AppError> {
+    async fn ensure_code_command(&self) -> Result<(), AppError> {
         match self.shell_executor.execute("which code").await {
             Ok(_) => Ok(()),
             Err(_) => {
