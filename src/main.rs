@@ -1,5 +1,5 @@
 mod application;
-mod config;
+mod constants;
 mod domain;
 mod error;
 mod infrastructure;
@@ -25,7 +25,7 @@ async fn main() -> Result<(), AppError> {
         _ => LevelFilter::Trace,
     };
 
-    logger::setup_logger(log_level)?;
+    logger::setup_logger(log_level).map_err(|e| AppError::Logger(e.to_string()))?;
 
     let config = AppConfig::new().await?;
 

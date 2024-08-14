@@ -15,9 +15,6 @@ pub enum AppError {
     #[error("Unsupported OS: {0}")]
     UnsupportedOS(String),
 
-    #[error("Link error: {0}")]
-    Link(String),
-
     #[error("Logger error: {0}")]
     Logger(String),
 
@@ -29,7 +26,4 @@ pub enum AppError {
 
     #[error("Deployment error: {0}")]
     Deployment(String),
-
-    #[error("Configuration error: {0}")]
-    Config(String),
 }

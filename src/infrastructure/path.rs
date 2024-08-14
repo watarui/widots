@@ -17,9 +17,10 @@ impl PathExpander {
 impl PathOperations for PathExpander {
     async fn expand_tilde(&self, path: &Path) -> Result<PathBuf, AppError> {
         let expanded_path = if path.starts_with("~") {
-            self.get_home_dir()
-                .await?
-                .join(path.strip_prefix("~").map_err(|e| AppError::Io(e.into()))?)
+            self.get_home_dir().await?.join(
+                path.strip_prefix("~")
+                    .map_err(|e| AppError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?,
+            )
         } else {
             path.to_path_buf()
         };

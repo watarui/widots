@@ -1,4 +1,4 @@
-use crate::config::constants::TEST_HOME_DIR;
+use crate::constants::TEST_HOME_DIR;
 use crate::error::AppError;
 use crate::{application::AppConfig, models::link::FileProcessResult};
 use clap::{Args, ValueHint};

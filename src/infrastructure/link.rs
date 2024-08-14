@@ -1,21 +1,17 @@
-use crate::config::constants::{LINK_IGNORED_ANCESTORS, LINK_IGNORED_FILES, LINK_IGNORED_PREFIXES};
+use crate::constants::{LINK_IGNORED_ANCESTORS, LINK_IGNORED_FILES, LINK_IGNORED_PREFIXES};
 use crate::domain::link::LinkOperations;
-use crate::domain::path::PathOperations;
 use crate::error::AppError;
 use crate::models::link::FileProcessResult;
 use async_trait::async_trait;
 use futures::stream::{self, StreamExt};
 use std::path::Path;
-use std::sync::Arc;
 use tokio::fs;
 
-pub struct LinkerImpl {
-    path_operations: Arc<dyn PathOperations>,
-}
+pub struct LinkerImpl;
 
 impl LinkerImpl {
-    pub fn new(path_operations: Arc<dyn PathOperations>) -> Self {
-        Self { path_operations }
+    pub fn new() -> Self {
+        Self
     }
 
     async fn create_symlink(

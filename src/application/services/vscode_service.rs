@@ -1,5 +1,5 @@
 // src/application/services/vscode_service.rs
-use crate::config::constants::{RESOURCES_DIR, VSCODE_EXTENSIONS_FILENAME};
+use crate::constants::{RESOURCES_DIR, VSCODE_EXTENSIONS_FILENAME};
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
 use crate::infrastructure::fs::FileSystemOperations;

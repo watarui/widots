@@ -8,10 +8,10 @@ use crate::models::config::Config;
 use crate::models::link::FileProcessResult;
 use crate::utils::toml::TomlOperations;
 use async_trait::async_trait;
+use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
-use tokio::io::AsyncWriteExt;
 
 #[async_trait]
 pub trait LoadService: Send + Sync {
@@ -74,12 +74,11 @@ impl LoadServiceImpl {
     }
 
     async fn run_bash_script(&self, script: &str) -> Result<(), AppError> {
-        let mut temp_file = NamedTempFile::new().map_err(|e| AppError::IoError(e.to_string()))?;
+        let mut temp_file = NamedTempFile::new().map_err(AppError::Io)?;
         temp_file
             .as_file_mut()
             .write_all(script.as_bytes())
-            .await
-            .map_err(|e| AppError::IoError(e.to_string()))?;
+            .map_err(AppError::Io)?;
 
         let command = format!("bash {}", temp_file.path().display());
         self.shell_executor.execute(&command).await?;

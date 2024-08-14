@@ -1,9 +1,15 @@
 use crate::application::services::brew_service::BrewService;
+use crate::application::services::brew_service::BrewServiceImpl;
 use crate::application::services::deploy_service::DeployService;
+use crate::application::services::deploy_service::DeployServiceImpl;
 use crate::application::services::fish_service::FishService;
+use crate::application::services::fish_service::FishServiceImpl;
 use crate::application::services::link_service::LinkService;
+use crate::application::services::link_service::LinkServiceImpl;
 use crate::application::services::load_service::LoadService;
+use crate::application::services::load_service::LoadServiceImpl;
 use crate::application::services::vscode_service::VSCodeService;
+use crate::application::services::vscode_service::VSCodeServiceImpl;
 use crate::domain::link::LinkOperations;
 use crate::domain::os::OSOperations;
 use crate::domain::path::PathOperations;
@@ -18,13 +24,6 @@ use crate::infrastructure::prompt::Prompt;
 use crate::infrastructure::shell::executor::SystemShellExecutor;
 use crate::utils::toml::{TomlOperations, TomlParser};
 use std::sync::Arc;
-
-use super::services::brew_service::BrewServiceImpl;
-use super::services::deploy_service::DeployServiceImpl;
-use super::services::fish_service::FishServiceImpl;
-use super::services::link_service::LinkServiceImpl;
-use super::services::load_service::LoadServiceImpl;
-use super::services::vscode_service::VSCodeServiceImpl;
 
 pub struct AppConfig {
     link_service: Arc<dyn LinkService>,
@@ -45,8 +44,7 @@ impl AppConfig {
         let toml_parser: Arc<dyn TomlOperations> = Arc::new(TomlParser::new());
         let prompter: Arc<dyn PromptOperations> = Arc::new(Prompt::new());
 
-        let link_operations: Arc<dyn LinkOperations> =
-            Arc::new(LinkerImpl::new(path_operations.clone()));
+        let link_operations: Arc<dyn LinkOperations> = Arc::new(LinkerImpl::new());
 
         let link_service = Arc::new(LinkServiceImpl::new(
             link_operations.clone(),
@@ -73,7 +71,6 @@ impl AppConfig {
         ));
         let fish_service = Arc::new(FishServiceImpl::new(
             shell_executor.clone(),
-            fs_operations.clone(),
             os_detector.clone(),
         ));
         let vscode_service = Arc::new(VSCodeServiceImpl::new(

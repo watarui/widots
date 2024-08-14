@@ -1,7 +1,6 @@
 use crate::domain::os::OSOperations;
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
-use crate::infrastructure::fs::FileSystemOperations;
 use async_trait::async_trait;
 use std::sync::Arc;
 
@@ -14,19 +13,13 @@ pub trait FishService: Send + Sync {
 
 pub struct FishServiceImpl {
     shell_executor: Arc<dyn ShellExecutor>,
-    fs_operations: Arc<dyn FileSystemOperations>,
     os_detector: Arc<dyn OSOperations>,
 }
 
 impl FishServiceImpl {
-    pub fn new(
-        shell_executor: Arc<dyn ShellExecutor>,
-        fs_operations: Arc<dyn FileSystemOperations>,
-        os_detector: Arc<dyn OSOperations>,
-    ) -> Self {
+    pub fn new(shell_executor: Arc<dyn ShellExecutor>, os_detector: Arc<dyn OSOperations>) -> Self {
         Self {
             shell_executor,
-            fs_operations,
             os_detector,
         }
     }

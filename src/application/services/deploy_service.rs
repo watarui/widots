@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use tokio::fs;
 
-use crate::config::constants::{
+use crate::constants::{
     DEPLOY_DESTINATION_PATH, DEPLOY_SOURCE_PATH, FISH_COMPLETIONS_FILENAME,
     FISH_COMPLETIONS_SOURCE_PATH, FISH_COMPLETIONS_TARGET_DIR,
 };
@@ -18,24 +18,24 @@ pub trait DeployService: Send + Sync {
 
 pub struct DeployServiceImpl {
     shell_executor: Arc<dyn ShellExecutor>,
-    path_expander: Arc<dyn PathOperations>,
+    path_operations: Arc<dyn PathOperations>,
 }
 
 impl DeployServiceImpl {
     pub fn new(
         shell_executor: Arc<dyn ShellExecutor>,
-        path_expander: Arc<dyn PathOperations>,
+        path_operations: Arc<dyn PathOperations>,
     ) -> Self {
         Self {
             shell_executor,
-            path_expander,
+            path_operations,
         }
     }
 
     async fn deploy_executable(&self) -> Result<(), AppError> {
         let source = Path::new(DEPLOY_SOURCE_PATH);
         let destination = self
-            .path_expander
+            .path_operations
             .parse_path(Path::new(DEPLOY_DESTINATION_PATH))
             .await?;
 
@@ -53,7 +53,7 @@ impl DeployServiceImpl {
 
     async fn locate_fish_completions(&self) -> Result<(), AppError> {
         let target_dir = self
-            .path_expander
+            .path_operations
             .parse_path(Path::new(FISH_COMPLETIONS_TARGET_DIR))
             .await?;
         fs::create_dir_all(&target_dir).await?;
