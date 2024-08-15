@@ -3,7 +3,6 @@ mod constants;
 mod domain;
 mod error;
 mod infrastructure;
-mod integration_tests;
 mod models;
 mod presentation;
 mod utils;
