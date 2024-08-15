@@ -53,7 +53,7 @@ async fn test_expand_tilde() -> Result<(), AppError> {
     let path_expander = PathExpander::new();
     let result = path_expander.expand_tilde(Path::new("~/test")).await?;
     assert!(result.to_str().unwrap().contains("/test"));
-    assert!(!result.to_str().unwrap().contains("~"));
+    assert!(!result.to_str().unwrap().contains('~'));
     Ok(())
 }
 
