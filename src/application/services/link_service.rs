@@ -224,7 +224,7 @@ async fn test_materialize_dotfiles() {
 
 #[cfg(test)]
 fn file_name_strategy() -> impl Strategy<Value = String> {
-    // ファイル名の先頭にドットを付けるかどうかをランダムに決定
+    // Add dot to the beginning of the file name or not
     prop::bool::ANY.prop_flat_map(|has_dot| {
         string_regex("[a-zA-Z0-9_]{1,10}")
             .unwrap()
@@ -248,12 +248,12 @@ proptest! {
             tokio::fs::create_dir_all(&source_path).await.unwrap();
             tokio::fs::create_dir_all(&target_path).await.unwrap();
 
-            // ソースファイルの作成
+            // Create source files
             for file in &source_files {
                 tokio::fs::write(source_path.join(file), "test content").await.unwrap();
             }
 
-            // ターゲットファイルの作成（競合のシミュレーション）
+            // Create target files (simulate existing files)
             for file in &target_files {
                 tokio::fs::write(target_path.join(file), "existing content").await.unwrap();
             }
@@ -261,12 +261,6 @@ proptest! {
             let services = TestServiceProvider::new(true);
             let result = services.link_service().link_dotfiles(&source_path, &target_path, force).await;
 
-            println!("Source files: {:?}", source_files);
-            println!("Target files: {:?}", target_files);
-            println!("Force: {}", force);
-            println!("Result: {:?}", result);
-
-            // 結果の検証
             match result {
                 Ok(file_results) => {
                     for file in &source_files {
@@ -296,7 +290,7 @@ proptest! {
                         }
                     }
 
-                    // ターゲットファイルの検証
+                    // Assert that all target files are linked or skipped
                     for file in &target_files {
                         let file_result = file_results.iter().find(|r| {
                             match r {
@@ -324,7 +318,7 @@ proptest! {
                     }
                 },
                 Err(e) => {
-                    // エラーが発生した場合、それが許容可能なものであることを確認
+                    // Check if the error is expected
                     assert!(matches!(e, AppError::Io(_) | AppError::Symlink(_)));
                 }
             }

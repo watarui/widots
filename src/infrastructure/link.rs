@@ -5,8 +5,6 @@ use crate::models::link::FileProcessResult;
 use async_trait::async_trait;
 use regex::Regex;
 use std::path::Path;
-#[cfg(test)]
-use tempfile::TempDir;
 use tokio::fs;
 
 pub struct LinkerImpl;
@@ -53,10 +51,13 @@ impl LinkerImpl {
             }
         }
 
-        Ok(match fs::symlink(source, target).await {
-            Ok(_) => FileProcessResult::Linked(source.to_path_buf(), target.to_path_buf()),
-            Err(e) => FileProcessResult::Error(AppError::Symlink(e.to_string())),
-        })
+        match fs::symlink(source, target).await {
+            Ok(_) => Ok(FileProcessResult::Linked(
+                source.to_path_buf(),
+                target.to_path_buf(),
+            )),
+            Err(e) => Ok(FileProcessResult::Error(AppError::Symlink(e.to_string()))),
+        }
     }
 
     async fn materialize_symlink(&self, path: &Path) -> Result<FileProcessResult, AppError> {
@@ -64,6 +65,25 @@ impl LinkerImpl {
         fs::remove_file(path).await?;
         fs::copy(&target, path).await?;
         Ok(FileProcessResult::Materialized(path.to_path_buf(), target))
+    }
+
+    fn is_ignored_file(&self, file_name: &str) -> bool {
+        LINK_IGNORED_FILES.contains(file_name)
+    }
+
+    fn has_ignored_prefix(&self, file_name: &str) -> bool {
+        LINK_IGNORED_PREFIXES
+            .iter()
+            .any(|prefix| file_name.starts_with(prefix))
+    }
+
+    fn has_ignored_ancestor(&self, path: &Path) -> bool {
+        path.ancestors().any(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .map(|name| LINK_IGNORED_ANCESTORS.contains(name))
+                .unwrap_or(false)
+        })
     }
 }
 
@@ -120,6 +140,7 @@ impl LinkOperations for LinkerImpl {
 
         Ok(results)
     }
+
     async fn materialize_symlinks_recursively(
         &self,
         target: &Path,
@@ -147,60 +168,202 @@ impl LinkOperations for LinkerImpl {
     fn should_ignore(&self, path: &Path) -> bool {
         let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
-        LINK_IGNORED_FILES.contains(file_name)
-            || LINK_IGNORED_PREFIXES
-                .iter()
-                .any(|prefix| file_name.starts_with(prefix))
-            || path.ancestors().any(|p| {
-                p.file_name()
-                    .and_then(|n| n.to_str())
-                    .map(|name| LINK_IGNORED_ANCESTORS.contains(name))
-                    .unwrap_or(false)
-            })
+        self.is_ignored_file(file_name)
+            || self.has_ignored_prefix(file_name)
+            || self.has_ignored_ancestor(path)
     }
 }
 
-#[tokio::test]
-async fn test_link_recursively() -> Result<(), AppError> {
-    let temp_dir = TempDir::new()?;
-    let source_dir = temp_dir.path().join("source");
-    let target_dir = temp_dir.path().join("target");
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+    use proptest::strategy::Strategy;
+    use std::collections::HashSet;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
 
-    fs::create_dir(&source_dir).await?;
-    fs::create_dir(&target_dir).await?;
+    #[test]
+    fn test_should_ignore() {
+        let linker = LinkerImpl::new();
 
-    fs::write(source_dir.join("file1.txt"), "content1").await?;
-    fs::write(source_dir.join("file2.txt"), "content2").await?;
-    let dir1_path = source_dir.join("dir1");
-    if !dir1_path.exists() {
-        fs::create_dir_all(&dir1_path).await?;
+        // Test ignored files
+        assert!(linker.should_ignore(Path::new(".DS_Store")));
+        assert!(linker.should_ignore(Path::new(".gitignore")));
+
+        // Test ignored prefixes
+        assert!(linker.should_ignore(Path::new(".hidden_file")));
+        assert!(linker.should_ignore(Path::new("_ignored_file")));
+
+        // Test ignored ancestors
+        assert!(linker.should_ignore(Path::new("some/path/.git/config")));
+        assert!(linker.should_ignore(Path::new("project/node_modules/package/file.js")));
+
+        // Test non-ignored files
+        assert!(!linker.should_ignore(Path::new("README.md")));
+        assert!(!linker.should_ignore(Path::new("some/path/file.rs")));
     }
-    fs::write(dir1_path.join("file3.txt"), "content3").await?;
 
-    let linker = LinkerImpl::new();
+    #[test]
+    fn test_validate_filename() {
+        let linker = LinkerImpl::new();
 
-    let results = linker
-        .link_recursively(&source_dir, &target_dir, false)
-        .await?;
+        assert!(linker.validate_filename("valid_file.txt").is_ok());
+        assert!(linker.validate_filename("another-valid-file.rs").is_ok());
 
-    assert_eq!(results.len(), 4);
-    for result in results {
-        match result {
-            FileProcessResult::Linked(_, _) => {}
-            FileProcessResult::Created(_) => {}
-            _ => panic!("Expected Linked result"),
+        assert!(linker.validate_filename("").is_err());
+        assert!(linker.validate_filename(".").is_err());
+        assert!(linker.validate_filename("..").is_err());
+        assert!(linker.validate_filename("invalid*file.txt").is_err());
+        assert!(linker.validate_filename("invalid/file.txt").is_err());
+    }
+
+    #[tokio::test]
+    async fn test_link_recursively() -> Result<(), AppError> {
+        let temp_dir = TempDir::new()?;
+        let source_dir = temp_dir.path().join("source");
+        let target_dir = temp_dir.path().join("target");
+
+        fs::create_dir(&source_dir).await?;
+        fs::create_dir(&target_dir).await?;
+
+        fs::write(source_dir.join("file1.txt"), "content1").await?;
+        fs::write(source_dir.join("file2.txt"), "content2").await?;
+        let dir1_path = source_dir.join("dir1");
+        if !dir1_path.exists() {
+            fs::create_dir_all(&dir1_path).await?;
+        }
+        fs::write(dir1_path.join("file3.txt"), "content3").await?;
+
+        let linker = LinkerImpl::new();
+
+        let results = linker
+            .link_recursively(&source_dir, &target_dir, false)
+            .await?;
+
+        assert_eq!(results.len(), 4);
+        for result in results {
+            match result {
+                FileProcessResult::Linked(_, _) => {}
+                FileProcessResult::Created(_) => {}
+                _ => panic!("Expected Linked result"),
+            }
+        }
+
+        assert!(fs::symlink_metadata(target_dir.join("file1.txt"))
+            .await?
+            .is_symlink());
+        assert!(fs::symlink_metadata(target_dir.join("file2.txt"))
+            .await?
+            .is_symlink());
+        assert!(fs::symlink_metadata(target_dir.join("dir1/file3.txt"))
+            .await?
+            .is_symlink());
+
+        Ok(())
+    }
+
+    fn valid_filename() -> impl Strategy<Value = String> {
+        r"[a-zA-Z0-9][a-zA-Z0-9_\-\.]{0,9}".prop_map(|s| {
+            if s == "." || s == ".." {
+                s + "x"
+            } else {
+                s
+            }
+        })
+    }
+
+    fn valid_file_structure() -> impl Strategy<Value = Vec<(String, bool)>> {
+        prop::collection::vec((valid_filename(), any::<bool>()), 0..5)
+    }
+
+    proptest! {
+        #[test]
+        fn test_should_ignore_prop(path in any::<PathBuf>()) {
+            let linker = LinkerImpl::new();
+            let ignored = linker.should_ignore(&path);
+
+            // Check if the result is consistent with our expectations
+            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            let expected_ignore = LINK_IGNORED_FILES.contains(file_name) ||
+                LINK_IGNORED_PREFIXES.iter().any(|prefix| file_name.starts_with(prefix)) ||
+                path.ancestors().any(|p| {
+                    p.file_name()
+                        .and_then(|n| n.to_str())
+                        .map(|name| LINK_IGNORED_ANCESTORS.contains(name))
+                        .unwrap_or(false)
+                });
+
+            prop_assert_eq!(ignored, expected_ignore);
+        }
+
+        #[test]
+        fn test_validate_filename_prop(filename in r"[a-zA-Z0-9._-]{1,255}") {
+            let linker = LinkerImpl::new();
+            prop_assert!(linker.validate_filename(&filename).is_ok());
+        }
+
+        #[test]
+        fn test_invalid_filename_prop(filename in r"[^a-zA-Z0-9._-]{1,255}") {
+            let linker = LinkerImpl::new();
+            prop_assert!(linker.validate_filename(&filename).is_err());
+        }
+
+        #[test]
+        fn test_link_recursively_prop(
+            file_structure in valid_file_structure(),
+            force in any::<bool>()
+        ) {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let temp_dir = TempDir::new().unwrap();
+                let source_dir = temp_dir.path().join("source");
+                let target_dir = temp_dir.path().join("target");
+
+                fs::create_dir_all(&source_dir).await.unwrap();
+                fs::create_dir_all(&target_dir).await.unwrap();
+
+                // Create the file structure
+                for (path, is_dir) in &file_structure {
+                    let full_path = source_dir.join(path);
+                    if *is_dir {
+                        fs::create_dir_all(&full_path).await.unwrap();
+                    } else {
+                        if let Some(parent) = full_path.parent() {
+                            fs::create_dir_all(parent).await.unwrap();
+                        }
+                        fs::write(&full_path, "content").await.unwrap();
+                    }
+                }
+
+                let linker = LinkerImpl::new();
+                let results = linker.link_recursively(&source_dir, &target_dir, force).await.unwrap();
+
+                // Check that all non-ignored files are linked
+                let mut linked_files = HashSet::new();
+                for result in &results {
+                    if let FileProcessResult::Linked(source, _) = result {
+                        linked_files.insert(source.strip_prefix(&source_dir).unwrap().to_path_buf());
+                    }
+                }
+
+                for (path, is_dir) in &file_structure {
+                    let path = Path::new(path);
+                    if !linker.should_ignore(path) {
+                        if *is_dir {
+                            prop_assert!(target_dir.join(path).is_dir(), "Non-ignored directory {:?} was not created", path);
+                        } else {
+                            prop_assert!(linked_files.contains(path), "Non-ignored file {:?} was not linked", path);
+                        }
+                    } else if *is_dir {
+                            prop_assert!(!target_dir.join(path).exists(), "Ignored directory {:?} was created", path);
+                        } else {
+                            prop_assert!(!linked_files.contains(path), "Ignored file {:?} was linked", path);
+                    }
+                }
+
+                Ok(())
+            }).unwrap()
         }
     }
-
-    assert!(fs::symlink_metadata(target_dir.join("file1.txt"))
-        .await?
-        .is_symlink());
-    assert!(fs::symlink_metadata(target_dir.join("file2.txt"))
-        .await?
-        .is_symlink());
-    assert!(fs::symlink_metadata(target_dir.join("dir1/file3.txt"))
-        .await?
-        .is_symlink());
-
-    Ok(())
 }

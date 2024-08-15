@@ -6,7 +6,6 @@ lazy_static! {
         let mut s = HashSet::new();
         s.insert(".DS_Store");
         s.insert(".gitignore");
-        s.insert("README.md");
         s
     };
     pub static ref LINK_IGNORED_PREFIXES: HashSet<&'static str> = {

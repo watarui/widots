@@ -49,3 +49,4 @@ homebrew_installed = []
 [dev-dependencies]
 mockall = "0.13.0"
 proptest = "1.5.0"
+tempdir = "0.3.7"

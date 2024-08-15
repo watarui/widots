@@ -43,28 +43,6 @@ impl PromptOperations for Prompt {
     }
 }
 
-pub struct ForcePrompt;
-
-impl Default for ForcePrompt {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ForcePrompt {
-    pub fn new() -> Self {
-        ForcePrompt
-    }
-}
-
-#[async_trait]
-impl PromptOperations for ForcePrompt {
-    async fn confirm_action(&self, message: &str) -> Result<bool, AppError> {
-        println!("{}", message);
-        Ok(true)
-    }
-}
-
 #[cfg(test)]
 pub struct DummyPrompt<R: BufRead> {
     reader: R,
@@ -86,11 +64,11 @@ impl<R: BufRead> DummyPrompt<R> {
 
 #[tokio::test]
 async fn test_confirm_action() -> Result<(), io::Error> {
-    // テスト用の一時ファイルを作成し、ユーザー入力をシミュレート
+    // Simulate user input by creating a temporary file for testing
     let temp_file = tempfile::NamedTempFile::new()?;
     writeln!(temp_file.as_file(), "y")?;
 
-    // 標準入力を模倣
+    // Emulate standard input
     let file = File::open(temp_file.path())?;
     let reader = BufReader::new(file);
 
