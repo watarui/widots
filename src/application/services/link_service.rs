@@ -1,3 +1,5 @@
+#[cfg(test)]
+use crate::application::AppConfig;
 use crate::domain::link::LinkOperations;
 use crate::domain::path::PathOperations;
 use crate::domain::prompt::PromptOperations;
@@ -6,10 +8,15 @@ use crate::models::link::FileProcessResult;
 use async_trait::async_trait;
 #[cfg(test)]
 use mockall::mock;
+#[cfg(test)]
+use prop::string::string_regex;
+use proptest::prelude::*;
 use std::path::Path;
 #[cfg(test)]
 use std::path::PathBuf;
 use std::sync::Arc;
+#[cfg(test)]
+use tempfile::TempDir;
 
 #[async_trait]
 pub trait LinkService: Send + Sync {
@@ -210,4 +217,113 @@ async fn test_materialize_dotfiles() {
     assert!(result.is_ok());
     let file_results = result.unwrap();
     assert_eq!(file_results.len(), 1);
+}
+
+#[cfg(test)]
+fn file_name_strategy() -> impl Strategy<Value = String> {
+    // ファイル名の先頭にドットを付けるかどうかをランダムに決定
+    prop::bool::ANY.prop_flat_map(|has_dot| {
+        string_regex("[a-zA-Z0-9_]{1,10}")
+            .unwrap()
+            .prop_map(move |s| if has_dot { format!(".{}", s) } else { s })
+    })
+}
+
+proptest! {
+    #[test]
+    fn link_service_doesnt_crash(
+        source_files in prop::collection::vec(file_name_strategy(), 0..10),
+        target_files in prop::collection::vec(file_name_strategy(), 0..5),
+        force in prop::bool::ANY
+    ) {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let temp_dir = TempDir::new().unwrap();
+            let source_path = temp_dir.path().join("source");
+            let target_path = temp_dir.path().join("target");
+            tokio::fs::create_dir_all(&source_path).await.unwrap();
+            tokio::fs::create_dir_all(&target_path).await.unwrap();
+
+            // ソースファイルの作成
+            for file in &source_files {
+                tokio::fs::write(source_path.join(file), "test content").await.unwrap();
+            }
+
+            // ターゲットファイルの作成（競合のシミュレーション）
+            for file in &target_files {
+                tokio::fs::write(target_path.join(file), "existing content").await.unwrap();
+            }
+
+            let config = AppConfig::new().await.unwrap();
+            let result = config.get_force_link_service().link_dotfiles(&source_path, &target_path, force).await;
+
+            println!("Source files: {:?}", source_files);
+            println!("Target files: {:?}", target_files);
+            println!("Force: {}", force);
+            println!("Result: {:?}", result);
+
+            // 結果の検証
+            match result {
+                Ok(file_results) => {
+                    for file in &source_files {
+                        let file_in_target = target_files.contains(file);
+                        let file_result = file_results.iter().find(|r| {
+                            match r {
+                                FileProcessResult::Linked(src, _) | FileProcessResult::Skipped(src) => {
+                                    src.file_name().unwrap().to_str().unwrap() == file
+                                },
+                                _ => false
+                            }
+                        });
+
+                        if file_result.is_none() {
+                            println!("Warning: File {} not found in results", file);
+                            continue;
+                        }
+
+                        match file_result.unwrap() {
+                            FileProcessResult::Linked(_, _) => {
+                                assert!(force || !file_in_target, "File {} should not be linked without force flag", file);
+                            },
+                            FileProcessResult::Skipped(_) => {
+                                assert!(!force && file_in_target, "File {} should not be skipped with force flag or if not in target", file);
+                            },
+                            _ => println!("Unexpected result for file {}", file),
+                        }
+                    }
+
+                    // ターゲットファイルの検証
+                    for file in &target_files {
+                        let file_result = file_results.iter().find(|r| {
+                            match r {
+                                FileProcessResult::Linked(_, dst) | FileProcessResult::Skipped(dst) => {
+                                    dst.file_name().unwrap().to_str().unwrap() == file
+                                },
+                                _ => false
+                            }
+                        });
+
+                        if file_result.is_none() {
+                            println!("Warning: Target file {} not found in results", file);
+                            continue;
+                        }
+
+                        match file_result.unwrap() {
+                            FileProcessResult::Linked(_, _) => {
+                                assert!(force, "Target file {} should not be linked without force flag", file);
+                            },
+                            FileProcessResult::Skipped(_) => {
+                                assert!(!force, "Target file {} should not be skipped with force flag", file);
+                            },
+                            _ => println!("Unexpected result for target file {}", file),
+                        }
+                    }
+                },
+                Err(e) => {
+                    // エラーが発生した場合、それが許容可能なものであることを確認
+                    assert!(matches!(e, AppError::Io(_) | AppError::Symlink(_)));
+                }
+            }
+        });
+    }
 }

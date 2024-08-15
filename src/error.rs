@@ -21,6 +21,9 @@ pub enum AppError {
     #[error("File not found: {0}")]
     FileNotFound(PathBuf),
 
+    #[error("Invalid file name: {0}")]
+    InvalidFilename(String),
+
     #[error("Directory not found")]
     DirectoryNotFound,
 

@@ -3,6 +3,7 @@ use crate::domain::link::LinkOperations;
 use crate::error::AppError;
 use crate::models::link::FileProcessResult;
 use async_trait::async_trait;
+use regex::Regex;
 use std::path::Path;
 #[cfg(test)]
 use tempfile::TempDir;
@@ -19,6 +20,23 @@ impl Default for LinkerImpl {
 impl LinkerImpl {
     pub fn new() -> Self {
         Self
+    }
+
+    fn validate_filename(&self, filename: &str) -> Result<(), String> {
+        if filename.is_empty() {
+            return Err("Filename cannot be empty".to_string());
+        }
+
+        if filename == "." || filename == ".." {
+            return Err("Filename cannot be '.' or '..'".to_string());
+        }
+
+        let valid_chars = Regex::new(r"^[a-zA-Z0-9._-]+$").unwrap();
+        if !valid_chars.is_match(filename) {
+            return Err("Filename contains invalid characters".to_string());
+        }
+
+        Ok(())
     }
 
     async fn create_symlink(
@@ -70,7 +88,18 @@ impl LinkOperations for LinkerImpl {
         while let Some(entry) = entries.next_entry().await? {
             let ent = entry.path();
 
+            let file_name = entry.file_name();
+            let file_name_str = file_name.to_str().ok_or_else(|| {
+                AppError::InvalidFilename(file_name.to_string_lossy().to_string())
+            })?;
+
+            if let Err(e) = self.validate_filename(file_name_str) {
+                println!("Skipped invalid file name: {} due to {}", file_name_str, e);
+                continue;
+            }
+
             if self.should_ignore(&ent) {
+                println!("Ignored: {:?}", ent);
                 continue;
             }
 

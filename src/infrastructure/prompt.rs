@@ -36,6 +36,28 @@ impl PromptOperations for Prompt {
     }
 }
 
+pub struct ForcePrompt;
+
+impl Default for ForcePrompt {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ForcePrompt {
+    pub fn new() -> Self {
+        ForcePrompt
+    }
+}
+
+#[async_trait]
+impl PromptOperations for ForcePrompt {
+    async fn confirm_action(&self, message: &str) -> Result<bool, AppError> {
+        println!("{}", message);
+        Ok(true)
+    }
+}
+
 #[cfg(test)]
 pub struct DummyPrompt<R: BufRead> {
     reader: R,

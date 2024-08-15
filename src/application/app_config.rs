@@ -20,6 +20,7 @@ use crate::infrastructure::fs::{FileSystemOperations, FileSystemOperationsImpl};
 use crate::infrastructure::link::LinkerImpl;
 use crate::infrastructure::os::OSDetector;
 use crate::infrastructure::path::PathExpander;
+use crate::infrastructure::prompt::ForcePrompt;
 use crate::infrastructure::prompt::Prompt;
 use crate::infrastructure::shell::executor::SystemShellExecutor;
 use crate::utils::toml::{TomlOperations, TomlParser};
@@ -27,6 +28,7 @@ use std::sync::Arc;
 
 pub struct AppConfig {
     link_service: Arc<dyn LinkService>,
+    force_link_service: Arc<dyn LinkService>,
     load_service: Arc<dyn LoadService>,
     deploy_service: Arc<dyn DeployService>,
     brew_service: Arc<dyn BrewService>,
@@ -43,13 +45,19 @@ impl AppConfig {
         let path_operations: Arc<dyn PathOperations> = Arc::new(PathExpander::new());
         let toml_parser: Arc<dyn TomlOperations> = Arc::new(TomlParser::new());
         let prompter: Arc<dyn PromptOperations> = Arc::new(Prompt::new());
-
+        let force_prompter: Arc<dyn PromptOperations> = Arc::new(ForcePrompt::new());
         let link_operations: Arc<dyn LinkOperations> = Arc::new(LinkerImpl::new());
 
         let link_service = Arc::new(LinkServiceImpl::new(
             link_operations.clone(),
             path_operations.clone(),
             prompter.clone(),
+        ));
+
+        let force_link_service = Arc::new(LinkServiceImpl::new(
+            link_operations.clone(),
+            path_operations.clone(),
+            force_prompter.clone(),
         ));
 
         let load_service = Arc::new(LoadServiceImpl::new(
@@ -80,6 +88,7 @@ impl AppConfig {
 
         Ok(Self {
             link_service,
+            force_link_service,
             load_service,
             deploy_service,
             brew_service,
@@ -90,6 +99,11 @@ impl AppConfig {
 
     pub fn get_link_service(&self) -> &dyn LinkService {
         &*self.link_service
+    }
+
+    #[cfg(test)]
+    pub fn get_force_link_service(&self) -> &dyn LinkService {
+        &*self.force_link_service
     }
 
     pub fn get_load_service(&self) -> &dyn LoadService {
