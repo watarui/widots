@@ -1,4 +1,4 @@
-use crate::application::AppConfig;
+use crate::application::service_provider::ServiceProvider;
 use crate::constants::DEFAULT_CONFIG_TOML;
 use crate::constants::TEST_HOME_DIR;
 use crate::error::AppError;
@@ -30,7 +30,7 @@ pub struct LoadArgs {
     test: bool,
 }
 
-pub async fn execute(args: LoadArgs, config: &AppConfig) -> Result<(), AppError> {
+pub async fn execute(args: LoadArgs, services: &dyn ServiceProvider) -> Result<(), AppError> {
     let home = dirs::home_dir().ok_or(AppError::DirectoryNotFound)?;
     let target = if args.test {
         home.join(TEST_HOME_DIR)
@@ -38,8 +38,8 @@ pub async fn execute(args: LoadArgs, config: &AppConfig) -> Result<(), AppError>
         home
     };
 
-    config
-        .get_load_service()
+    services
+        .load_service()
         .load(&args.config_toml, &target, args.force)
         .await
 }

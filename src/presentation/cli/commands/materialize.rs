@@ -1,4 +1,4 @@
-use crate::application::AppConfig;
+use crate::application::service_provider::ServiceProvider;
 use crate::error::AppError;
 use crate::models::link::FileProcessResult;
 use clap::Args;
@@ -10,9 +10,12 @@ pub struct MaterializeArgs {
     target: PathBuf,
 }
 
-pub async fn execute(args: MaterializeArgs, config: &AppConfig) -> Result<(), AppError> {
-    let results = config
-        .get_link_service()
+pub async fn execute(
+    args: MaterializeArgs,
+    services: &dyn ServiceProvider,
+) -> Result<(), AppError> {
+    let results = services
+        .link_service()
         .materialize_dotfiles(&args.target)
         .await?;
 

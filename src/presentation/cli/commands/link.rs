@@ -1,6 +1,7 @@
+use crate::application::service_provider::ServiceProvider;
 use crate::constants::TEST_HOME_DIR;
 use crate::error::AppError;
-use crate::{application::AppConfig, models::link::FileProcessResult};
+use crate::models::link::FileProcessResult;
 use clap::{Args, ValueHint};
 use std::path::PathBuf;
 
@@ -28,7 +29,7 @@ pub struct LinkArgs {
     test: bool,
 }
 
-pub async fn execute(args: LinkArgs, config: &AppConfig) -> Result<(), AppError> {
+pub async fn execute(args: LinkArgs, services: &dyn ServiceProvider) -> Result<(), AppError> {
     let home = dirs::home_dir().ok_or(AppError::DirectoryNotFound)?;
     let target = if args.test {
         home.join(TEST_HOME_DIR)
@@ -36,8 +37,8 @@ pub async fn execute(args: LinkArgs, config: &AppConfig) -> Result<(), AppError>
         home
     };
 
-    let results = config
-        .get_link_service()
+    let results = services
+        .link_service()
         .link_dotfiles(&args.source_path, &target, args.force)
         .await?;
 

@@ -1,4 +1,2 @@
-mod app_config;
+pub mod service_provider;
 pub mod services;
-
-pub use app_config::AppConfig;

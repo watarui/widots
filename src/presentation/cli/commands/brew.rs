@@ -1,4 +1,4 @@
-use crate::application::AppConfig;
+use crate::application::service_provider::ServiceProvider;
 use crate::error::AppError;
 use clap::{Args, Subcommand};
 
@@ -15,18 +15,18 @@ enum BrewCommands {
     Export,
 }
 
-pub async fn execute(args: BrewArgs, config: &AppConfig) -> Result<(), AppError> {
+pub async fn execute(args: BrewArgs, services: &dyn ServiceProvider) -> Result<(), AppError> {
     match args.command {
         BrewCommands::Install => {
-            config.get_brew_service().install().await?;
+            services.brew_service().install().await?;
             println!("Homebrew installed successfully");
         }
         BrewCommands::Import => {
-            config.get_brew_service().import().await?;
+            services.brew_service().import().await?;
             println!("Homebrew packages imported successfully");
         }
         BrewCommands::Export => {
-            config.get_brew_service().export().await?;
+            services.brew_service().export().await?;
             println!("Homebrew packages exported successfully");
         }
     }

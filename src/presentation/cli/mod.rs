@@ -1,4 +1,4 @@
-use crate::application::AppConfig;
+use crate::application::service_provider::ProductionServiceProvider;
 use crate::error::AppError;
 use clap::{ArgAction, Parser, Subcommand};
 
@@ -35,16 +35,18 @@ enum Commands {
     VSCode(commands::vscode::VSCodeArgs),
 }
 
-pub async fn run(args: Args, config: &AppConfig) -> Result<(), AppError> {
+pub async fn run(args: Args, service_provider: &ProductionServiceProvider) -> Result<(), AppError> {
     match args.command {
-        Commands::Link(link_args) => commands::link::execute(link_args, config).await,
+        Commands::Link(link_args) => commands::link::execute(link_args, service_provider).await,
         Commands::Materialize(materialize_args) => {
-            commands::materialize::execute(materialize_args, config).await
+            commands::materialize::execute(materialize_args, service_provider).await
         }
-        Commands::Load(load_args) => commands::load::execute(load_args, config).await,
-        Commands::Deploy => commands::deploy::execute(config).await,
-        Commands::Brew(brew_args) => commands::brew::execute(brew_args, config).await,
-        Commands::Fish(fish_args) => commands::fish::execute(fish_args, config).await,
-        Commands::VSCode(vscode_args) => commands::vscode::execute(vscode_args, config).await,
+        Commands::Load(load_args) => commands::load::execute(load_args, service_provider).await,
+        Commands::Deploy => commands::deploy::execute(service_provider).await,
+        Commands::Brew(brew_args) => commands::brew::execute(brew_args, service_provider).await,
+        Commands::Fish(fish_args) => commands::fish::execute(fish_args, service_provider).await,
+        Commands::VSCode(vscode_args) => {
+            commands::vscode::execute(vscode_args, service_provider).await
+        }
     }
 }

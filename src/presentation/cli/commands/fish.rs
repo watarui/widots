@@ -1,4 +1,4 @@
-use crate::application::AppConfig;
+use crate::application::service_provider::ServiceProvider;
 use crate::error::AppError;
 use clap::{Args, Subcommand};
 
@@ -15,18 +15,18 @@ enum FishCommands {
     InstallFisher,
 }
 
-pub async fn execute(args: FishArgs, config: &AppConfig) -> Result<(), AppError> {
+pub async fn execute(args: FishArgs, services: &dyn ServiceProvider) -> Result<(), AppError> {
     match args.command {
         FishCommands::Install => {
-            config.get_fish_service().install().await?;
+            services.fish_service().install().await?;
             println!("Fish shell installed successfully");
         }
         FishCommands::SetDefault => {
-            config.get_fish_service().set_default().await?;
+            services.fish_service().set_default().await?;
             println!("Fish shell set as default successfully");
         }
         FishCommands::InstallFisher => {
-            config.get_fish_service().install_fisher().await?;
+            services.fish_service().install_fisher().await?;
             println!("Fisher plugin manager installed successfully");
         }
     }

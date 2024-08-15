@@ -7,11 +7,11 @@ mod models;
 mod presentation;
 mod utils;
 
+use application::service_provider::ProductionServiceProvider;
 use clap::Parser;
 use error::AppError;
 use log::LevelFilter;
 
-use crate::application::AppConfig;
 use crate::presentation::cli::Args;
 use crate::utils::logger;
 
@@ -27,7 +27,7 @@ async fn main() -> Result<(), AppError> {
 
     logger::setup_logger(log_level).map_err(|e| AppError::Logger(e.to_string()))?;
 
-    let config = AppConfig::new().await?;
+    let services = ProductionServiceProvider::new().await?;
 
-    presentation::cli::run(args, &config).await
+    presentation::cli::run(args, &services).await
 }

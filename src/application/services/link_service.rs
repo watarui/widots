@@ -1,5 +1,7 @@
 #[cfg(test)]
-use crate::application::AppConfig;
+use crate::application::service_provider::ServiceProvider;
+#[cfg(test)]
+use crate::application::service_provider::TestServiceProvider;
 use crate::domain::link::LinkOperations;
 use crate::domain::path::PathOperations;
 use crate::domain::prompt::PromptOperations;
@@ -10,6 +12,7 @@ use async_trait::async_trait;
 use mockall::mock;
 #[cfg(test)]
 use prop::string::string_regex;
+#[cfg(test)]
 use proptest::prelude::*;
 use std::path::Path;
 #[cfg(test)]
@@ -229,6 +232,7 @@ fn file_name_strategy() -> impl Strategy<Value = String> {
     })
 }
 
+#[cfg(test)]
 proptest! {
     #[test]
     fn link_service_doesnt_crash(
@@ -254,8 +258,8 @@ proptest! {
                 tokio::fs::write(target_path.join(file), "existing content").await.unwrap();
             }
 
-            let config = AppConfig::new().await.unwrap();
-            let result = config.get_force_link_service().link_dotfiles(&source_path, &target_path, force).await;
+            let services = TestServiceProvider::new(true);
+            let result = services.link_service().link_dotfiles(&source_path, &target_path, force).await;
 
             println!("Source files: {:?}", source_files);
             println!("Target files: {:?}", target_files);

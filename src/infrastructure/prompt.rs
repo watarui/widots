@@ -12,27 +12,34 @@ use crate::error::AppError;
 use async_trait::async_trait;
 use inquire::Confirm;
 
-pub struct Prompt;
+pub struct Prompt {
+    force_yes: bool,
+}
 
 impl Default for Prompt {
     fn default() -> Self {
-        Self::new()
+        Self::new(false)
     }
 }
 
 impl Prompt {
-    pub fn new() -> Self {
-        Prompt
+    pub fn new(force_yes: bool) -> Self {
+        Prompt { force_yes }
     }
 }
 
 #[async_trait]
 impl PromptOperations for Prompt {
     async fn confirm_action(&self, message: &str) -> Result<bool, AppError> {
-        Confirm::new(message)
-            .with_default(false)
-            .prompt()
-            .map_err(|e| AppError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))
+        if self.force_yes {
+            println!("{}", message);
+            Ok(true)
+        } else {
+            Confirm::new(message)
+                .with_default(false)
+                .prompt()
+                .map_err(|e| AppError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))
+        }
     }
 }
 

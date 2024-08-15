@@ -1,4 +1,4 @@
-use crate::application::AppConfig;
+use crate::application::service_provider::ServiceProvider;
 use crate::error::AppError;
 use clap::{Args, Subcommand};
 
@@ -15,18 +15,18 @@ enum VSCodeCommands {
     EnsureCodeCommand,
 }
 
-pub async fn execute(args: VSCodeArgs, config: &AppConfig) -> Result<(), AppError> {
+pub async fn execute(args: VSCodeArgs, services: &dyn ServiceProvider) -> Result<(), AppError> {
     match args.command {
         VSCodeCommands::ExportExtensions => {
-            config.get_vscode_service().export_extensions().await?;
+            services.vscode_service().export_extensions().await?;
             println!("VSCode extensions exported successfully");
         }
         VSCodeCommands::ImportExtensions => {
-            config.get_vscode_service().import_extensions().await?;
+            services.vscode_service().import_extensions().await?;
             println!("VSCode extensions imported successfully");
         }
         VSCodeCommands::EnsureCodeCommand => {
-            config.get_vscode_service().ensure_code_command().await?;
+            services.vscode_service().ensure_code_command().await?;
             println!("VSCode 'code' command is now available");
         }
     }
