@@ -46,9 +46,6 @@ pub async fn execute(args: LinkArgs, services: &dyn ServiceProvider) -> Result<(
             FileProcessResult::Skipped(path) => {
                 println!("Skipped: {}", path.display());
             }
-            FileProcessResult::Error(e) => {
-                println!("Error: {:?}", e);
-            }
             FileProcessResult::Materialized(_, _) => {} // This should not occur during linking
         }
     }

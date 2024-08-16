@@ -1,4 +1,3 @@
-use crate::error::AppError;
 use std::path::PathBuf;
 
 #[derive(Debug)]
@@ -7,5 +6,4 @@ pub enum FileProcessResult {
     Created(PathBuf),
     Materialized(PathBuf, PathBuf),
     Skipped(PathBuf),
-    Error(AppError),
 }

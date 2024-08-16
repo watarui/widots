@@ -314,7 +314,7 @@ mod tests {
                     },
                     Err(e) => {
                         // Check if the error is expected
-                        prop_assert!(matches!(e, AppError::Io(_) | AppError::Symlink(_)), "Unexpected error: {:?}", e);
+                        prop_assert!(matches!(e, AppError::Io(_)), "Unexpected error: {:?}", e);
                     }
                 }
 

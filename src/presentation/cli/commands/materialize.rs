@@ -25,18 +25,12 @@ pub async fn execute(
         .await?;
 
     for result in results {
-        match result {
-            FileProcessResult::Materialized(path, original) => {
-                println!(
-                    "Materialized: {} (was linked to {})",
-                    path.display(),
-                    original.display()
-                );
-            }
-            FileProcessResult::Error(e) => {
-                println!("Error: {:?}", e);
-            }
-            _ => {} // Other variants should not occur during materialization
+        if let FileProcessResult::Materialized(path, original) = result {
+            println!(
+                "Materialized: {} (was linked to {})",
+                path.display(),
+                original.display()
+            );
         }
     }
 

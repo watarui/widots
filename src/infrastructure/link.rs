@@ -270,16 +270,6 @@ mod tests {
         Ok(())
     }
 
-    fn valid_filename() -> impl Strategy<Value = String> {
-        r"[a-zA-Z0-9][a-zA-Z0-9_\-\.]{0,9}".prop_map(|s| {
-            if s == "." || s == ".." {
-                s + "x"
-            } else {
-                s
-            }
-        })
-    }
-
     fn file_name_strategy() -> impl Strategy<Value = String> {
         prop::bool::ANY.prop_flat_map(|has_dot| {
             string_regex("[a-zA-Z][a-zA-Z0-9_]{0,9}")

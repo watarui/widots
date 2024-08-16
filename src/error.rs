@@ -29,7 +29,4 @@ pub enum AppError {
 
     #[error("Deployment error: {0}")]
     Deployment(String),
-
-    #[error("Symlink error: {0}")]
-    Symlink(String),
 }
