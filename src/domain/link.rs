@@ -9,7 +9,6 @@ pub trait LinkOperations: Send + Sync {
         &self,
         source: &Path,
         target: &Path,
-        force: bool,
     ) -> Result<Vec<FileProcessResult>, AppError>;
 
     async fn materialize_symlinks_recursively(

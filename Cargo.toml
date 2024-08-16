@@ -32,6 +32,7 @@ futures = "0.3.30"
 inquire = "0.7.5"
 lazy_static = "1.5.0"
 log = "0.4.22"
+rand = "0.8.5"
 regex = "1.10.6"
 serde = { version = "1.0.204", features = ["derive"] }
 tempfile = "3.11.0"
@@ -49,4 +50,3 @@ homebrew_installed = []
 [dev-dependencies]
 mockall = "0.13.0"
 proptest = "1.5.0"
-tempdir = "0.3.7"

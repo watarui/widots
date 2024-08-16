@@ -18,13 +18,6 @@ pub struct LoadArgs {
     #[arg(
         short,
         long,
-        help = "Force create symlinks, overwriting existing files"
-    )]
-    force: bool,
-
-    #[arg(
-        short,
-        long,
         help = "Link to the test directory instead of the home directory for testing purposes"
     )]
     test: bool,
@@ -40,6 +33,6 @@ pub async fn execute(args: LoadArgs, services: &dyn ServiceProvider) -> Result<(
 
     services
         .load_service()
-        .load(&args.config_toml, &target, args.force)
+        .load(&args.config_toml, &target)
         .await
 }

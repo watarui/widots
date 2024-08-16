@@ -19,7 +19,7 @@ use tempfile::NamedTempFile;
 
 #[async_trait]
 pub trait LoadService: Send + Sync {
-    async fn load(&self, config_path: &Path, target: &Path, force: bool) -> Result<(), AppError>;
+    async fn load(&self, config_path: &Path, target: &Path) -> Result<(), AppError>;
 }
 
 pub struct LoadServiceImpl {
@@ -50,15 +50,10 @@ impl LoadServiceImpl {
         }
     }
 
-    async fn evaluate_link_section(
-        &self,
-        config: &Config,
-        target: &Path,
-        force: bool,
-    ) -> Result<(), AppError> {
+    async fn evaluate_link_section(&self, config: &Config, target: &Path) -> Result<(), AppError> {
         if let Some(links) = &config.link {
             for link in links {
-                self.link_dotfiles(&link.location, target, force).await?;
+                self.link_dotfiles(&link.location, target).await?;
             }
         }
         Ok(())
@@ -93,7 +88,6 @@ impl LoadServiceImpl {
         &self,
         source: &Path,
         target: &Path,
-        force: bool,
     ) -> Result<Vec<FileProcessResult>, AppError> {
         let source = self.path_operations.parse_path(source).await?;
         let target = self.path_operations.parse_path(target).await?;
@@ -111,17 +105,17 @@ impl LoadServiceImpl {
         }
 
         self.link_operations
-            .link_recursively(&source, &target, force)
+            .link_recursively(&source, &target)
             .await
     }
 }
 
 #[async_trait]
 impl LoadService for LoadServiceImpl {
-    async fn load(&self, config_path: &Path, target: &Path, force: bool) -> Result<(), AppError> {
+    async fn load(&self, config_path: &Path, target: &Path) -> Result<(), AppError> {
         let config = self.toml_parser.parse(config_path).await?;
 
-        self.evaluate_link_section(&config, target, force).await?;
+        self.evaluate_link_section(&config, target).await?;
         self.evaluate_provision_section(&config).await?;
 
         Ok(())
@@ -137,7 +131,6 @@ mock! {
             &self,
             source: &Path,
             target: &Path,
-            force: bool,
         ) -> Result<Vec<FileProcessResult>, AppError>;
         async fn materialize_symlinks_recursively(
             &self,
@@ -223,7 +216,7 @@ async fn test_load() {
 
     mock_link_ops
         .expect_link_recursively()
-        .returning(|_, _, _| Ok(vec![]));
+        .returning(|_, _| Ok(vec![]));
 
     let load_service = LoadServiceImpl::new(
         Arc::new(mock_link_ops),
@@ -235,7 +228,7 @@ async fn test_load() {
     );
 
     let result = load_service
-        .load(Path::new("/config.toml"), Path::new("/target"), false)
+        .load(Path::new("/config.toml"), Path::new("/target"))
         .await;
 
     assert!(result.is_ok());
@@ -286,7 +279,7 @@ async fn test_load_with_provision() {
     );
 
     let result = load_service
-        .load(Path::new("/config.toml"), Path::new("/target"), false)
+        .load(Path::new("/config.toml"), Path::new("/target"))
         .await;
 
     assert!(result.is_ok());

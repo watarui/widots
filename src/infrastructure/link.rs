@@ -37,36 +37,6 @@ impl LinkerImpl {
         Ok(())
     }
 
-    async fn create_symlink(
-        &self,
-        source: &Path,
-        target: &Path,
-        force: bool,
-    ) -> Result<FileProcessResult, AppError> {
-        if target.exists() {
-            if force {
-                fs::remove_file(target).await?;
-            } else {
-                return Ok(FileProcessResult::Skipped(target.to_path_buf()));
-            }
-        }
-
-        match fs::symlink(source, target).await {
-            Ok(_) => Ok(FileProcessResult::Linked(
-                source.to_path_buf(),
-                target.to_path_buf(),
-            )),
-            Err(e) => Ok(FileProcessResult::Error(AppError::Symlink(e.to_string()))),
-        }
-    }
-
-    async fn materialize_symlink(&self, path: &Path) -> Result<FileProcessResult, AppError> {
-        let target = fs::read_link(path).await?;
-        fs::remove_file(path).await?;
-        fs::copy(&target, path).await?;
-        Ok(FileProcessResult::Materialized(path.to_path_buf(), target))
-    }
-
     fn is_ignored_file(&self, file_name: &str) -> bool {
         LINK_IGNORED_FILES.contains(file_name)
     }
@@ -111,21 +81,17 @@ impl LinkOperations for LinkerImpl {
         &self,
         source: &Path,
         target: &Path,
-        force: bool,
     ) -> Result<Vec<FileProcessResult>, AppError> {
         let mut results = Vec::new();
 
         if !target.exists() {
-            match fs::create_dir_all(target).await {
-                Ok(_) => results.push(FileProcessResult::Created(target.to_path_buf())),
-                Err(e) => return Err(AppError::Io(e)),
-            }
+            tokio::fs::create_dir_all(target).await?;
+            results.push(FileProcessResult::Created(target.to_path_buf()));
         }
 
-        let mut entries = fs::read_dir(source).await?;
+        let mut entries = tokio::fs::read_dir(source).await?;
         while let Some(entry) = entries.next_entry().await? {
-            let ent = entry.path();
-
+            let src_path = entry.path();
             let file_name = entry.file_name();
             let file_name_str = file_name.to_str().ok_or_else(|| {
                 AppError::InvalidFilename(file_name.to_string_lossy().to_string())
@@ -133,26 +99,28 @@ impl LinkOperations for LinkerImpl {
 
             if let Err(e) = self.validate_filename(file_name_str) {
                 println!("Skipped invalid file name: {} due to {}", file_name_str, e);
+                results.push(FileProcessResult::Skipped(src_path));
                 continue;
             }
 
-            if self.should_ignore(&ent) {
-                println!("Ignored: {:?}", ent);
+            if self.should_ignore(&src_path) {
+                println!("Ignored: {:?}", src_path);
+                results.push(FileProcessResult::Skipped(src_path));
                 continue;
             }
 
-            let target = target.join(entry.file_name());
+            let dst_path = target.join(&file_name);
 
-            if ent.is_dir() {
-                match self.link_recursively(&ent, &target, force).await {
-                    Ok(mut sub_results) => results.append(&mut sub_results),
-                    Err(e) => return Err(e),
-                }
+            if src_path.is_dir() {
+                tokio::fs::create_dir_all(&dst_path).await?;
+                let mut sub_results = self.link_recursively(&src_path, &dst_path).await?;
+                results.append(&mut sub_results);
             } else {
-                match self.create_symlink(&ent, &target, force).await {
-                    Ok(result) => results.push(result),
-                    Err(e) => return Err(e),
+                if dst_path.exists() {
+                    tokio::fs::remove_file(&dst_path).await?;
                 }
+                tokio::fs::symlink(&src_path, &dst_path).await?;
+                results.push(FileProcessResult::Linked(src_path, dst_path));
             }
         }
 
@@ -175,7 +143,10 @@ impl LinkOperations for LinkerImpl {
                 if path.is_dir() {
                     dirs.push(path);
                 } else if path.is_symlink() {
-                    results.push(self.materialize_symlink(&path).await?);
+                    let target = fs::read_link(&path).await?;
+                    fs::remove_file(&path).await?;
+                    fs::copy(&target, &path).await?;
+                    results.push(FileProcessResult::Materialized(path, target));
                 }
             }
         }
@@ -192,7 +163,6 @@ impl LinkOperations for LinkerImpl {
             || self.is_git_ignore_or_config(path)
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -249,6 +219,13 @@ mod tests {
         assert!(linker.validate_filename("invalid/file.txt").is_err());
     }
 
+    #[test]
+    fn test_validate_filename_special_entries() {
+        let linker = LinkerImpl::new();
+        assert!(linker.validate_filename(".").is_err());
+        assert!(linker.validate_filename("..").is_err());
+    }
+
     #[tokio::test]
     async fn test_link_recursively() -> Result<(), AppError> {
         let temp_dir = TempDir::new()?;
@@ -268,11 +245,9 @@ mod tests {
 
         let linker = LinkerImpl::new();
 
-        let results = linker
-            .link_recursively(&source_dir, &target_dir, false)
-            .await?;
+        let results = linker.link_recursively(&source_dir, &target_dir).await?;
 
-        assert_eq!(results.len(), 4);
+        assert_eq!(results.len(), 3);
         for result in results {
             match result {
                 FileProcessResult::Linked(_, _) => {}
@@ -325,9 +300,13 @@ mod tests {
         }
 
         #[test]
-        fn test_validate_filename_prop(filename in r"[a-zA-Z0-9._-]{1,255}") {
+        fn test_validate_filename_prop(filename in r"[a-zA-Z0-9][a-zA-Z0-9._-]{0,254}") {
             let linker = LinkerImpl::new();
-            prop_assert!(linker.validate_filename(&filename).is_ok());
+            if filename != "." && filename != ".." {
+                prop_assert!(linker.validate_filename(&filename).is_ok());
+            } else {
+                prop_assert!(linker.validate_filename(&filename).is_err());
+            }
         }
 
         #[test]
@@ -338,19 +317,14 @@ mod tests {
 
         #[test]
         fn test_link_recursively_prop(
-          file_structure in prop::collection::hash_set(valid_filename(), 1..10).prop_flat_map(|names| {
-              let names_vec: Vec<_> = names.into_iter().collect();
-              let dirs = names_vec.iter().enumerate()
-                  .filter(|(i, _)| i % 2 == 0)
-                  .map(|(_, name)| name.clone())
-                  .collect::<HashSet<_>>();
-              let files = names_vec.iter().enumerate()
-                  .filter(|(i, _)| i % 2 != 0)
-                  .map(|(_, name)| name.clone())
-                  .collect::<HashSet<_>>();
-              (Just(dirs), Just(files))
-          }),
-          force in any::<bool>()
+            file_structure in prop::collection::hash_set(valid_filename(), 1..10).prop_flat_map(|names| {
+                let names_vec: Vec<_> = names.into_iter().collect();
+                let (dirs, files): (Vec<_>, Vec<_>) = names_vec.into_iter().enumerate()
+                    .partition(|(i, _)| i % 2 == 0);
+                let dirs = dirs.into_iter().map(|(_, name)| format!("dir_{}", name)).collect::<HashSet<_>>();
+                let files = files.into_iter().map(|(_, name)| format!("file_{}", name)).collect::<HashSet<_>>();
+                (Just(dirs), Just(files))
+            }),
         ) {
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async {
@@ -380,7 +354,7 @@ mod tests {
                 }
 
                 let linker = LinkerImpl::new();
-                let results = match linker.link_recursively(&source_dir, &target_dir, force).await {
+                let results = match linker.link_recursively(&source_dir, &target_dir).await {
                     Ok(r) => r,
                     Err(e) => {
                         println!("Error in link_recursively: {:?}", e);

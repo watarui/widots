@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc b3e66fef44e00e764f3c71b02c780d2255ca4403869bf05b8c9a0fae6a423c34 # shrinks to source_files = ["a"], target_files = [], force = false
+cc 9f235baa44ede9b6a259b7a437308d4b96a1fa6059d3950d426b9a946d79c439 # shrinks to source_files = ["c"], target_files = ["C"], force = false

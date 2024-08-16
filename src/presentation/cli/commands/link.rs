@@ -17,13 +17,6 @@ pub struct LinkArgs {
     #[arg(
         short,
         long,
-        help = "Force create symlinks, overwriting existing files"
-    )]
-    force: bool,
-
-    #[arg(
-        short,
-        long,
         help = "Link to the test directory instead of the home directory for testing purposes"
     )]
     test: bool,
@@ -39,7 +32,7 @@ pub async fn execute(args: LinkArgs, services: &dyn ServiceProvider) -> Result<(
 
     let results = services
         .link_service()
-        .link_dotfiles(&args.source_path, &target, args.force)
+        .link_dotfiles(&args.source_path, &target)
         .await?;
 
     for result in results {
