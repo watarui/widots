@@ -8,10 +8,10 @@ use std::path::PathBuf;
 #[derive(Args)]
 pub struct LoadArgs {
     #[arg(
-    value_hint = ValueHint::FilePath,
-    help = "The path to the TOML file",
-    default_value = DEFAULT_CONFIG_TOML,
-    value_name = "CONFIG_TOML_FILE_PATH"
+        value_hint = ValueHint::FilePath,
+        help = "The path to the TOML file",
+        default_value = DEFAULT_CONFIG_TOML,
+        value_name = "CONFIG_TOML_FILE_PATH"
     )]
     config_toml: PathBuf,
 

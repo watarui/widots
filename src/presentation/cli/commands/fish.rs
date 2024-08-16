@@ -4,7 +4,7 @@ use clap::{Args, Subcommand};
 
 #[derive(Args)]
 pub struct FishArgs {
-    #[clap(subcommand)]
+    #[clap(subcommand, value_enum, help = "Fish shell operation to execute")]
     command: FishCommands,
 }
 

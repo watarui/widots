@@ -6,7 +6,12 @@ use std::path::PathBuf;
 
 #[derive(Args)]
 pub struct MaterializeArgs {
-    #[clap(short, long)]
+    #[clap(
+        short,
+        long,
+        help = "The path to the dotfiles directory to materialize",
+        value_name = "TARGET_DOTFILES_DIR_PATH"
+    )]
     target: PathBuf,
 }
 

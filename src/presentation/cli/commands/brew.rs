@@ -4,7 +4,7 @@ use clap::{Args, Subcommand};
 
 #[derive(Args)]
 pub struct BrewArgs {
-    #[clap(subcommand)]
+    #[clap(subcommand, value_enum, help = "Homebrew operation to execute")]
     command: BrewCommands,
 }
 

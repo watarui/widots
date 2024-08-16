@@ -4,7 +4,7 @@ use clap::{Args, Subcommand};
 
 #[derive(Args)]
 pub struct VSCodeArgs {
-    #[clap(subcommand)]
+    #[clap(subcommand, value_enum, help = "VSCode extension operation to execute")]
     command: VSCodeCommands,
 }
 
