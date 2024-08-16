@@ -1,14 +1,13 @@
 use crate::application::service_provider::ServiceProvider;
 use crate::error::AppError;
 use crate::models::link::FileProcessResult;
-use clap::Args;
+use clap::{Args, ValueHint};
 use std::path::PathBuf;
 
 #[derive(Args)]
 pub struct MaterializeArgs {
-    #[clap(
-        short,
-        long,
+    #[arg(
+        value_hint = ValueHint::FilePath,
         help = "The path to the dotfiles directory to materialize",
         value_name = "TARGET_DOTFILES_DIR_PATH"
     )]
