@@ -159,13 +159,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_link_dotfiles() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let source_dir = temp_dir.path().join("source");
+        let target_dir = temp_dir.path().join("target");
+        tokio::fs::create_dir_all(&source_dir).await.unwrap();
+        tokio::fs::create_dir_all(&target_dir).await.unwrap();
+
         let mut mock_link_ops = MockLinkOperations::new();
         let mut mock_path_ops = MockPathOperations::new();
         let mut mock_prompt_ops = MockPromptOperations::new();
 
         mock_path_ops
             .expect_parse_path()
-            .returning(|path| Ok(path.to_path_buf()));
+            .returning(move |path| Ok(temp_dir.path().join(path)));
 
         mock_prompt_ops
             .expect_confirm_action()
@@ -187,29 +193,13 @@ mod tests {
             Arc::new(mock_prompt_ops),
         );
 
-        // Mock the tokio::fs::read_dir function
-        tokio::task::LocalSet::new()
-            .run_until(async {
-                tokio::task::spawn_local(async {
-                    tokio::fs::read_dir("/target")
-                        .await
-                        .unwrap()
-                        .next_entry()
-                        .await
-                        .unwrap();
-                })
-                .await
-                .unwrap();
-
-                let result = link_service
-                    .link_dotfiles(Path::new("/source"), Path::new("/target"))
-                    .await;
-
-                assert!(result.is_ok());
-                let file_results = result.unwrap();
-                assert_eq!(file_results.len(), 2);
-            })
+        let result = link_service
+            .link_dotfiles(Path::new("source"), Path::new("target"))
             .await;
+
+        assert!(result.is_ok());
+        let file_results = result.unwrap();
+        assert_eq!(file_results.len(), 2);
     }
 
     #[tokio::test]
