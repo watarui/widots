@@ -1,7 +1,7 @@
 [package]
 exclude = ["tests", "example", ".github", "completions"]
 name = "widots"
-version = "0.0.1"
+version = "0.0.3"
 edition = "2021"
 license = "MIT"
 description = "A personal dotfile manager"
@@ -10,6 +10,8 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+assert_cmd = "2.0.16"
+async-trait = "0.1.81"
 chrono = "0.4.38"
 clap = { version = "4.5.13", features = [
   "color",
@@ -25,13 +27,18 @@ clap = { version = "4.5.13", features = [
   "string",
 ] }
 dirs = "5.0.1"
-fern = "0.6.2"
+fern = { version = "0.6.2", features = ["chrono", "colored"] }
+futures = "0.3.30"
 inquire = "0.7.5"
+lazy_static = "1.5.0"
 log = "0.4.22"
+rand = "0.8.5"
+regex = "1.10.6"
 serde = { version = "1.0.204", features = ["derive"] }
-serde_yaml = "0.9.34"
 tempfile = "3.11.0"
 thiserror = "1.0.63"
+tokio = { version = "1.39.2", features = ["full", "test-util"] }
+toml = "0.8.19"
 uuid = { version = "1.10.0", features = ["v4"] }
 walkdir = "2.5.0"
 whoami = "1.5.1"
@@ -42,3 +49,4 @@ homebrew_installed = []
 
 [dev-dependencies]
 mockall = "0.13.0"
+proptest = "1.5.0"

@@ -1,4 +1,2 @@
-pub mod file;
+pub mod config;
 pub mod link;
-pub mod shell;
-pub mod yaml;

@@ -3,7 +3,7 @@
 # subcommands
 complete -f -c widots -n "__fish_use_subcommand" -a "link" -d "Link dotfiles"
 complete -f -c widots -n "__fish_use_subcommand" -a "materialize" -d "Materialize dotfiles"
-complete -f -c widots -n "__fish_use_subcommand" -a "run" -d "Apply configuration from YAML file"
+complete -f -c widots -n "__fish_use_subcommand" -a "load" -d "Apply configuration from TOML file"
 complete -f -c widots -n "__fish_use_subcommand" -a "brew" -d "Manage Homebrew"
 complete -f -c widots -n "__fish_use_subcommand" -a "deploy" -d "Deploy widots to the local machine"
 complete -f -c widots -n "__fish_use_subcommand" -a "fish" -d "Manage Fish shell"
@@ -20,9 +20,9 @@ complete -c widots -n "__fish_seen_subcommand_from link" -a "(__fish_complete_pa
 complete -c widots -n "__fish_seen_subcommand_from materialize" -a "(__fish_complete_path)"
 
 # run
-complete -c widots -n "__fish_seen_subcommand_from run" -s t -l test -d "Test the dotfiles directory for symlinks and files"
-complete -c widots -n "__fish_seen_subcommand_from run" -s f -l force -d "Force create symlinks, overwriting existing files"
-complete -c widots -n "__fish_seen_subcommand_from run" -a "(__fish_complete_path)"
+complete -c widots -n "__fish_seen_subcommand_from load" -s t -l test -d "Test the dotfiles directory for symlinks and files"
+complete -c widots -n "__fish_seen_subcommand_from load" -s f -l force -d "Force create symlinks, overwriting existing files"
+complete -c widots -n "__fish_seen_subcommand_from load" -a "(__fish_complete_path)"
 
 # brew
 complete -f -c widots -n "__fish_seen_subcommand_from brew" -a "install" -d "Install Homebrew itself"

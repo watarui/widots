@@ -1,0 +1,12 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 6b715f083eb94181a8c5cf825744155d9c02b8a7eb192e31de3626e75e073806 # shrinks to file_structure = ["/ "], force = false
+cc c24cf7d0478231fd8ec28d333ee8d915ee86735cc097045b035c3b6fa08b9943 # shrinks to file_structure = ["."], force = false
+cc 11f46984a52b1b7da4e401e035071ae4dc7c4faa6213aa4149350db0f6c608e0 # shrinks to file_structure = [("3", true), ("3", false)], force = false
+cc 5ead6df0a7dfbc8a2703bc6539ed781ab0e7fafe04a1021e4f07ee131fa5627a # shrinks to file_structure = ({"s"}, {"S"}), force = false
+cc 92af37979493394977c9797b1f8b8a345cdeb0bd7c2c47427d6beeeb0d7df4de # shrinks to filename = "."
+cc 8bf8b76e4623eae83b0f10e660deb7329bb3905dba2175a120678fac98cf5955 # shrinks to file_structure = ({"dir_YlY9Van.", "dir_UCpXcu_75"}, {"file_t", "file_T"}), force = true

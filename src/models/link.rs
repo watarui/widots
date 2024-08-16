@@ -1,11 +1,9 @@
-use crate::error::app_error::AppError;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum FileProcessResult {
-    Linked(PathBuf, PathBuf), // (source path, target path)
+    Linked(PathBuf, PathBuf),
     Created(PathBuf),
-    Materialized(PathBuf, PathBuf), // (symlink path, original target path)
+    Materialized(PathBuf, PathBuf),
     Skipped(PathBuf),
-    Error(AppError),
 }
