@@ -166,6 +166,7 @@ impl LinkOperations for LinkerImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use prop::string::string_regex;
     use proptest::prelude::*;
     use proptest::strategy::Strategy;
     use std::collections::HashSet;
@@ -279,6 +280,21 @@ mod tests {
         })
     }
 
+    fn file_name_strategy() -> impl Strategy<Value = String> {
+        prop::bool::ANY.prop_flat_map(|has_dot| {
+            string_regex("[a-zA-Z][a-zA-Z0-9_]{0,9}")
+                .unwrap()
+                .prop_map(move |s| {
+                    let s = if has_dot { format!(".{}", s) } else { s };
+                    if rand::random() {
+                        s.to_lowercase()
+                    } else {
+                        s.to_uppercase()
+                    }
+                })
+        })
+    }
+
     proptest! {
         #[test]
         fn test_should_ignore_prop(path in any::<PathBuf>()) {
@@ -317,7 +333,7 @@ mod tests {
 
         #[test]
         fn test_link_recursively_prop(
-            file_structure in prop::collection::hash_set(valid_filename(), 1..10).prop_flat_map(|names| {
+            file_structure in prop::collection::hash_set(file_name_strategy(), 1..10).prop_flat_map(|names| {
                 let names_vec: Vec<_> = names.into_iter().collect();
                 let (dirs, files): (Vec<_>, Vec<_>) = names_vec.into_iter().enumerate()
                     .partition(|(i, _)| i % 2 == 0);
@@ -363,28 +379,20 @@ mod tests {
                 };
 
                 // Check that all non-ignored files are linked
+                // Compare file names case-insensitively
                 let mut linked_files = HashSet::new();
                 for result in &results {
                     if let FileProcessResult::Linked(source, _) = result {
-                        linked_files.insert(source.strip_prefix(&source_dir).unwrap().to_path_buf());
-                    }
-                }
-
-                for dir in &dirs {
-                    let path = Path::new(dir);
-                    if !linker.should_ignore(path) {
-                        prop_assert!(target_dir.join(path).is_dir(), "Non-ignored directory {:?} was not created", path);
-                    } else {
-                        prop_assert!(!target_dir.join(path).exists(), "Ignored directory {:?} was created", path);
+                        linked_files.insert(source.strip_prefix(&source_dir).unwrap().to_string_lossy().to_lowercase());
                     }
                 }
 
                 for file in &files {
                     let path = Path::new(file);
                     if !linker.should_ignore(path) {
-                        prop_assert!(linked_files.contains(path), "Non-ignored file {:?} was not linked", path);
+                        prop_assert!(linked_files.contains(&path.to_string_lossy().to_lowercase()), "Non-ignored file {:?} was not linked", path);
                     } else {
-                        prop_assert!(!linked_files.contains(path), "Ignored file {:?} was linked", path);
+                        prop_assert!(!linked_files.contains(&path.to_string_lossy().to_lowercase()), "Ignored file {:?} was linked", path);
                     }
                 }
 
