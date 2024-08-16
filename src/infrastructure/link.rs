@@ -182,7 +182,6 @@ mod tests {
         assert!(linker.should_ignore(Path::new(".gitignore")));
 
         // Test ignored prefixes
-        assert!(linker.should_ignore(Path::new(".hidden_file")));
         assert!(linker.should_ignore(Path::new("_ignored_file")));
 
         // Test ignored ancestors
@@ -197,6 +196,7 @@ mod tests {
 
         // Test non-ignored files
         assert!(!linker.should_ignore(Path::new("README.md")));
+        assert!(!linker.should_ignore(Path::new(".hidden_file")));
         assert!(!linker.should_ignore(Path::new("some/path/file.rs")));
 
         // Test non-ignored git/ignore or git/config like files

@@ -10,7 +10,6 @@ lazy_static! {
     };
     pub static ref LINK_IGNORED_PREFIXES: HashSet<&'static str> = {
         let mut s = HashSet::new();
-        s.insert(".");
         s.insert("_");
         s
     };

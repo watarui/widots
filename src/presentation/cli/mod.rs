@@ -13,7 +13,7 @@ pub struct Args {
     #[clap(subcommand)]
     command: Commands,
 
-    #[clap(short, long, global = true, action = ArgAction::Count)]
+    #[clap(short, long, global = true, action = ArgAction::Count, help = "Sets the level of verbosity")]
     pub verbose: u8,
 }
 
