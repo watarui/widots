@@ -10,22 +10,22 @@ pub struct VSCodeArgs {
 
 #[derive(Subcommand)]
 enum VSCodeCommands {
-    ExportExtensions,
-    ImportExtensions,
-    EnsureCodeCommand,
+    Export,
+    Import,
+    Code,
 }
 
 pub async fn execute(args: VSCodeArgs, services: &dyn ServiceProvider) -> Result<(), AppError> {
     match args.command {
-        VSCodeCommands::ExportExtensions => {
+        VSCodeCommands::Export => {
             services.vscode_service().export_extensions().await?;
             println!("VSCode extensions exported successfully");
         }
-        VSCodeCommands::ImportExtensions => {
+        VSCodeCommands::Import => {
             services.vscode_service().import_extensions().await?;
             println!("VSCode extensions imported successfully");
         }
-        VSCodeCommands::EnsureCodeCommand => {
+        VSCodeCommands::Code => {
             services.vscode_service().ensure_code_command().await?;
             println!("VSCode 'code' command is now available");
         }
@@ -191,7 +191,7 @@ mod tests {
         let mock_services = Arc::new(CustomMockServiceProvider::new()) as Arc<dyn ServiceProvider>;
 
         let args = VSCodeArgs {
-            command: VSCodeCommands::ExportExtensions,
+            command: VSCodeCommands::Export,
         };
         let result = execute(args, mock_services.as_ref()).await;
         assert!(result.is_ok());
@@ -202,7 +202,7 @@ mod tests {
         let mock_services = Arc::new(CustomMockServiceProvider::new()) as Arc<dyn ServiceProvider>;
 
         let args = VSCodeArgs {
-            command: VSCodeCommands::ImportExtensions,
+            command: VSCodeCommands::Import,
         };
         let result = execute(args, mock_services.as_ref()).await;
         assert!(result.is_ok());
@@ -213,7 +213,7 @@ mod tests {
         let mock_services = Arc::new(CustomMockServiceProvider::new()) as Arc<dyn ServiceProvider>;
 
         let args = VSCodeArgs {
-            command: VSCodeCommands::EnsureCodeCommand,
+            command: VSCodeCommands::Code,
         };
         let result = execute(args, mock_services.as_ref()).await;
         assert!(result.is_ok());

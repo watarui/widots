@@ -11,8 +11,8 @@ pub struct FishArgs {
 #[derive(Subcommand)]
 enum FishCommands {
     Install,
-    SetDefault,
-    InstallFisher,
+    Default,
+    Fisher,
 }
 
 pub async fn execute(args: FishArgs, services: &dyn ServiceProvider) -> Result<(), AppError> {
@@ -21,11 +21,11 @@ pub async fn execute(args: FishArgs, services: &dyn ServiceProvider) -> Result<(
             services.fish_service().install().await?;
             println!("Fish shell installed successfully");
         }
-        FishCommands::SetDefault => {
+        FishCommands::Default => {
             services.fish_service().set_default().await?;
             println!("Fish shell set as default successfully");
         }
-        FishCommands::InstallFisher => {
+        FishCommands::Fisher => {
             services.fish_service().install_fisher().await?;
             println!("Fisher plugin manager installed successfully");
         }
@@ -202,7 +202,7 @@ mod tests {
         let mock_services = Arc::new(CustomMockServiceProvider::new()) as Arc<dyn ServiceProvider>;
 
         let args = FishArgs {
-            command: FishCommands::InstallFisher,
+            command: FishCommands::Fisher,
         };
         let result = execute(args, mock_services.as_ref()).await;
         assert!(result.is_ok());
@@ -213,7 +213,7 @@ mod tests {
         let mock_services = Arc::new(CustomMockServiceProvider::new()) as Arc<dyn ServiceProvider>;
 
         let args = FishArgs {
-            command: FishCommands::SetDefault,
+            command: FishCommands::Default,
         };
         let result = execute(args, mock_services.as_ref()).await;
         assert!(result.is_ok());
