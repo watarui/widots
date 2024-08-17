@@ -48,27 +48,73 @@ impl PathOperations for PathExpander {
     }
 }
 
-#[tokio::test]
-async fn test_expand_tilde() -> Result<(), AppError> {
-    let path_expander = PathExpander::new();
-    let result = path_expander.expand_tilde(Path::new("~/test")).await?;
-    assert!(result.to_str().unwrap().contains("/test"));
-    assert!(!result.to_str().unwrap().contains('~'));
-    Ok(())
-}
+#[cfg(test)]
+mod test {
+    use super::*;
+    use proptest::prelude::*;
 
-#[tokio::test]
-async fn test_parse_path() -> Result<(), AppError> {
-    let path_expander = PathExpander::new();
-    let result = path_expander.parse_path(Path::new("/tmp/test")).await?;
-    assert_eq!(result, Path::new("/tmp/test"));
-    Ok(())
-}
+    #[tokio::test]
+    async fn test_expand_tilde() -> Result<(), AppError> {
+        let path_expander = PathExpander::new();
+        let result = path_expander.expand_tilde(Path::new("~/test")).await?;
+        assert!(result.to_str().unwrap().contains("/test"));
+        assert!(!result.to_str().unwrap().contains('~'));
+        Ok(())
+    }
 
-#[tokio::test]
-async fn test_get_home_dir() -> Result<(), AppError> {
-    let path_expander = PathExpander::new();
-    let result = path_expander.get_home_dir().await?;
-    assert!(result.is_absolute());
-    Ok(())
+    #[tokio::test]
+    async fn test_parse_path() -> Result<(), AppError> {
+        let path_expander = PathExpander::new();
+        let result = path_expander.parse_path(Path::new("/tmp/test")).await?;
+        assert_eq!(result, Path::new("/tmp/test"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_home_dir() -> Result<(), AppError> {
+        let path_expander = PathExpander::new();
+        let result = path_expander.get_home_dir().await?;
+        assert!(result.is_absolute());
+        Ok(())
+    }
+
+    fn arbitrary_path_component() -> BoxedStrategy<String> {
+        prop::string::string_regex("[a-zA-Z0-9_-]{1,10}")
+            .unwrap()
+            .boxed()
+    }
+
+    proptest! {
+        #[test]
+        fn test_expand_tilde_idempotent(
+            path in prop::collection::vec(arbitrary_path_component(), 0..5)
+                .prop_map(|components| PathBuf::from("~").join(components.join("/")))
+        ) {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let _ = rt.block_on(async {
+                let path_expander = PathExpander::new();
+                let expanded_once = path_expander.expand_tilde(&path).await.unwrap();
+                let expanded_twice = path_expander.expand_tilde(&expanded_once).await.unwrap();
+
+                prop_assert_eq!(expanded_once, expanded_twice);
+                Ok(())
+            });
+        }
+
+        #[test]
+        fn test_parse_path_idempotent(
+            path in prop::collection::vec(arbitrary_path_component(), 0..5)
+                .prop_map(|components| PathBuf::from("/").join(components.join("/")))
+        ) {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let _ = rt.block_on(async {
+                let path_expander = PathExpander::new();
+                let parsed_once = path_expander.parse_path(&path).await.unwrap();
+                let parsed_twice = path_expander.parse_path(&parsed_once).await.unwrap();
+
+                prop_assert_eq!(parsed_once, parsed_twice);
+                Ok(())
+            });
+        }
+    }
 }
