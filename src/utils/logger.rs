@@ -25,3 +25,15 @@ pub fn setup_logger(level: LevelFilter) -> Result<(), fern::InitError> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use log::LevelFilter;
+
+    #[test]
+    fn test_setup_logger() {
+        let result = setup_logger(LevelFilter::Info);
+        assert!(result.is_ok(), "Logger setup failed");
+    }
+}
