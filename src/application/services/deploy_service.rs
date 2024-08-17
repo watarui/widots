@@ -1,8 +1,4 @@
 use async_trait::async_trait;
-#[cfg(test)]
-use mockall::mock;
-#[cfg(test)]
-use mockall::predicate::eq;
 use tokio::fs;
 
 use crate::constants::{
@@ -12,11 +8,7 @@ use crate::constants::{
 use crate::domain::path::PathOperations;
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
-#[cfg(test)]
-use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
-#[cfg(test)]
-use std::path::PathBuf;
 use std::sync::Arc;
 
 #[async_trait]
@@ -96,65 +88,110 @@ impl DeployService for DeployServiceImpl {
 }
 
 #[cfg(test)]
-mock! {
-    ShellExecutor {}
-    #[async_trait]
-    impl ShellExecutor for ShellExecutor {
-        async fn execute(&self, command: &str) -> Result<String, AppError>;
-        async fn output(&self, command: &str) -> Result<std::process::Output, AppError>;
-        fn stderr(&self, output: &std::process::Output) -> String;
+mod test {
+    use super::*;
+    use crate::domain::path::PathOperations;
+    use crate::domain::shell::ShellExecutor;
+    use crate::error::AppError;
+    use async_trait::async_trait;
+    use mockall::mock;
+    use mockall::predicate::eq;
+    use std::os::unix::process::ExitStatusExt;
+    use std::path::Path;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    mock! {
+        ShellExecutor {}
+        #[async_trait]
+        impl ShellExecutor for ShellExecutor {
+            async fn execute(&self, command: &str) -> Result<String, AppError>;
+            async fn output(&self, command: &str) -> Result<std::process::Output, AppError>;
+            fn stderr(&self, output: &std::process::Output) -> String;
+        }
     }
-}
-
-#[cfg(test)]
-mock! {
-    PathOperations {}
-    #[async_trait]
-    impl PathOperations for PathOperations {
-        async fn expand_tilde(&self, path: &Path) -> Result<PathBuf, AppError>;
-        async fn parse_path(&self, path: &Path) -> Result<PathBuf, AppError>;
-        async fn get_home_dir(&self) -> Result<PathBuf, AppError>;
+    mock! {
+        PathOperations {}
+        #[async_trait]
+        impl PathOperations for PathOperations {
+            async fn expand_tilde(&self, path: &Path) -> Result<PathBuf, AppError>;
+            async fn parse_path(&self, path: &Path) -> Result<PathBuf, AppError>;
+            async fn get_home_dir(&self) -> Result<PathBuf, AppError>;
+        }
     }
-}
 
-#[cfg(test)]
-mock! {
-    DeployService {}
-    #[async_trait]
-    impl DeployService for DeployService {
-        async fn execute(&self) -> Result<(), AppError>;
+    mock! {
+        DeployService {}
+        #[async_trait]
+        impl DeployService for DeployService {
+            async fn execute(&self) -> Result<(), AppError>;
+        }
     }
-}
 
-#[tokio::test]
-async fn test_deploy_execute() {
-    let mut mock_shell = MockShellExecutor::new();
-    let mut mock_path = MockPathOperations::new();
-    let mut mock_deploy_service = MockDeployService::new();
+    #[tokio::test]
+    async fn test_deploy_execute() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mut mock_path = MockPathOperations::new();
+        let mut mock_deploy_service = MockDeployService::new();
 
-    mock_shell
-        .expect_output()
-        .with(eq("cargo build --release"))
-        .returning(|_| {
-            Ok(std::process::Output {
-                status: std::process::ExitStatus::from_raw(0),
-                stdout: vec![],
-                stderr: vec![],
-            })
-        });
+        mock_shell
+            .expect_output()
+            .with(eq("cargo build --release"))
+            .returning(|_| {
+                Ok(std::process::Output {
+                    status: std::process::ExitStatus::from_raw(0),
+                    stdout: vec![],
+                    stderr: vec![],
+                })
+            });
 
-    mock_shell
-        .expect_execute()
-        .returning(|_| Ok("Command executed successfully".to_string()));
+        mock_shell
+            .expect_execute()
+            .returning(|_| Ok("Command executed successfully".to_string()));
 
-    mock_path
-        .expect_parse_path()
-        .returning(|path| Ok(path.to_path_buf()));
+        mock_path
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
 
-    mock_deploy_service.expect_execute().returning(|| Ok(()));
+        mock_deploy_service.expect_execute().returning(|| Ok(()));
 
-    let _deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
+        let _deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
 
-    let result = mock_deploy_service.execute().await;
-    assert!(result.is_ok());
+        let result = mock_deploy_service.execute().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_deploy_executable_failure() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mut mock_path = MockPathOperations::new();
+
+        mock_path
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
+
+        mock_shell
+            .expect_execute()
+            .returning(|_| Err(AppError::ShellExecution("Deployment failed".to_string())));
+
+        let deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
+
+        let result = deploy_service.deploy_executable().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_locate_fish_completions_failure() {
+        let mock_shell = MockShellExecutor::new();
+        let mut mock_path = MockPathOperations::new();
+
+        mock_path
+            .expect_parse_path()
+            .returning(|_| Err(AppError::Deployment("Invalid path".to_string())));
+
+        let deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
+
+        let result = deploy_service.locate_fish_completions().await;
+        assert!(result.is_err());
+    }
 }

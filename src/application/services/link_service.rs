@@ -7,17 +7,6 @@ use async_trait::async_trait;
 use std::path::Path;
 use std::sync::Arc;
 
-#[cfg(test)]
-use mockall::mock;
-#[cfg(test)]
-use prop::string::string_regex;
-#[cfg(test)]
-use proptest::prelude::*;
-#[cfg(test)]
-use std::path::PathBuf;
-#[cfg(test)]
-use tempfile::TempDir;
-
 #[async_trait]
 pub trait LinkService: Send + Sync {
     async fn link_dotfiles(
@@ -115,47 +104,58 @@ impl LinkService for LinkServiceImpl {
 }
 
 #[cfg(test)]
-mock! {
-    LinkOperations {}
-    #[async_trait]
-    impl LinkOperations for LinkOperations {
-        async fn link_recursively(
-            &self,
-            source: &Path,
-            target: &Path,
-        ) -> Result<Vec<FileProcessResult>, AppError>;
-        async fn materialize_symlinks_recursively(
-            &self,
-            target: &Path,
-        ) -> Result<Vec<FileProcessResult>, AppError>;
-        fn should_ignore(&self, path: &Path) -> bool;
-    }
-}
-
-#[cfg(test)]
-mock! {
-    PathOperations {}
-    #[async_trait]
-    impl PathOperations for PathOperations {
-        async fn expand_tilde(&self, path: &Path) -> Result<PathBuf, AppError>;
-        async fn parse_path(&self, path: &Path) -> Result<PathBuf, AppError>;
-        async fn get_home_dir(&self) -> Result<PathBuf, AppError>;
-    }
-}
-
-#[cfg(test)]
-mock! {
-    PromptOperations {}
-    #[async_trait]
-    impl PromptOperations for PromptOperations {
-        async fn confirm_action(&self, message: &str) -> Result<bool, AppError>;
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::service_provider::{ServiceProvider, TestServiceProvider};
+    use crate::application::service_provider::ServiceProvider;
+    use crate::application::service_provider::TestServiceProvider;
+    use crate::domain::link::LinkOperations;
+    use crate::domain::path::PathOperations;
+    use crate::domain::prompt::PromptOperations;
+    use crate::error::AppError;
+    use crate::models::link::FileProcessResult;
+    use async_trait::async_trait;
+    use mockall::mock;
+    use prop::string::string_regex;
+    use proptest::prelude::*;
+    use std::path::Path;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+    use tempfile::TempDir;
+
+    mock! {
+        LinkOperations {}
+        #[async_trait]
+        impl LinkOperations for LinkOperations {
+            async fn link_recursively(
+                &self,
+                source: &Path,
+                target: &Path,
+            ) -> Result<Vec<FileProcessResult>, AppError>;
+            async fn materialize_symlinks_recursively(
+                &self,
+                target: &Path,
+            ) -> Result<Vec<FileProcessResult>, AppError>;
+            fn should_ignore(&self, path: &Path) -> bool;
+        }
+    }
+
+    mock! {
+        PathOperations {}
+        #[async_trait]
+        impl PathOperations for PathOperations {
+            async fn expand_tilde(&self, path: &Path) -> Result<PathBuf, AppError>;
+            async fn parse_path(&self, path: &Path) -> Result<PathBuf, AppError>;
+            async fn get_home_dir(&self) -> Result<PathBuf, AppError>;
+        }
+    }
+
+    mock! {
+        PromptOperations {}
+        #[async_trait]
+        impl PromptOperations for PromptOperations {
+            async fn confirm_action(&self, message: &str) -> Result<bool, AppError>;
+        }
+    }
 
     #[tokio::test]
     async fn test_link_dotfiles() {
@@ -238,6 +238,62 @@ mod tests {
         assert!(result.is_ok());
         let file_results = result.unwrap();
         assert_eq!(file_results.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_link_dotfiles_user_cancellation() {
+        let mock_link_ops = MockLinkOperations::new();
+        let mut mock_path_ops = MockPathOperations::new();
+        let mut mock_prompt_ops = MockPromptOperations::new();
+
+        mock_path_ops
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
+
+        mock_prompt_ops
+            .expect_confirm_action()
+            .returning(|_| Ok(false));
+
+        let link_service = LinkServiceImpl::new(
+            Arc::new(mock_link_ops),
+            Arc::new(mock_path_ops),
+            Arc::new(mock_prompt_ops),
+        );
+
+        let result = link_service
+            .link_dotfiles(Path::new("/source"), Path::new("/target"))
+            .await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_materialize_dotfiles_user_cancellation() {
+        let mock_link_ops = MockLinkOperations::new();
+        let mut mock_path_ops = MockPathOperations::new();
+        let mut mock_prompt_ops = MockPromptOperations::new();
+
+        mock_path_ops
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
+
+        mock_prompt_ops
+            .expect_confirm_action()
+            .returning(|_| Ok(false));
+
+        let link_service = LinkServiceImpl::new(
+            Arc::new(mock_link_ops),
+            Arc::new(mock_path_ops),
+            Arc::new(mock_prompt_ops),
+        );
+
+        let result = link_service
+            .materialize_dotfiles(Path::new("/target"))
+            .await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 0);
     }
 
     fn file_name_strategy() -> impl Strategy<Value = String> {

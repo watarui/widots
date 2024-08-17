@@ -8,12 +8,8 @@ use crate::models::config::Config;
 use crate::models::link::FileProcessResult;
 use crate::utils::toml::TomlOperations;
 use async_trait::async_trait;
-#[cfg(test)]
-use mockall::mock;
 use std::io::Write;
 use std::path::Path;
-#[cfg(test)]
-use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
 
@@ -123,164 +119,251 @@ impl LoadService for LoadServiceImpl {
 }
 
 #[cfg(test)]
-mock! {
-    LinkOperations {}
-    #[async_trait]
-    impl LinkOperations for LinkOperations {
-        async fn link_recursively(
-            &self,
-            source: &Path,
-            target: &Path,
-        ) -> Result<Vec<FileProcessResult>, AppError>;
-        async fn materialize_symlinks_recursively(
-            &self,
-            target: &Path,
-        ) -> Result<Vec<FileProcessResult>, AppError>;
-        fn should_ignore(&self, path: &Path) -> bool;
+mod test {
+    use super::*;
+    use crate::domain::link::LinkOperations;
+    use crate::domain::os::OSOperations;
+    use crate::domain::path::PathOperations;
+    use crate::domain::prompt::PromptOperations;
+    use crate::domain::shell::ShellExecutor;
+    use crate::error::AppError;
+    use crate::models::config::Config;
+    use crate::models::link::FileProcessResult;
+    use crate::utils::toml::TomlOperations;
+    use async_trait::async_trait;
+    use mockall::mock;
+    use serde::de::Error;
+    use std::path::Path;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+
+    mock! {
+        LinkOperations {}
+        #[async_trait]
+        impl LinkOperations for LinkOperations {
+            async fn link_recursively(
+                &self,
+                source: &Path,
+                target: &Path,
+            ) -> Result<Vec<FileProcessResult>, AppError>;
+            async fn materialize_symlinks_recursively(
+                &self,
+                target: &Path,
+            ) -> Result<Vec<FileProcessResult>, AppError>;
+            fn should_ignore(&self, path: &Path) -> bool;
+        }
     }
-}
 
-#[cfg(test)]
-mock! {
-    PathOperations {}
-    #[async_trait]
-    impl PathOperations for PathOperations {
-        async fn expand_tilde(&self, path: &Path) -> Result<PathBuf, AppError>;
-        async fn parse_path(&self, path: &Path) -> Result<PathBuf, AppError>;
-        async fn get_home_dir(&self) -> Result<PathBuf, AppError>;
+    mock! {
+        PathOperations {}
+        #[async_trait]
+        impl PathOperations for PathOperations {
+            async fn expand_tilde(&self, path: &Path) -> Result<PathBuf, AppError>;
+            async fn parse_path(&self, path: &Path) -> Result<PathBuf, AppError>;
+            async fn get_home_dir(&self) -> Result<PathBuf, AppError>;
+        }
     }
-}
 
-#[cfg(test)]
-mock! {
-    TomlOperations {}
-    #[async_trait]
-    impl TomlOperations for TomlOperations {
-        async fn parse(&self, path: &Path) -> Result<Config, AppError>;
+    mock! {
+        TomlOperations {}
+        #[async_trait]
+        impl TomlOperations for TomlOperations {
+            async fn parse(&self, path: &Path) -> Result<Config, AppError>;
+        }
     }
-}
 
-#[cfg(test)]
-mock! {
-    OSOperations {}
-    #[async_trait]
-    impl OSOperations for OSOperations {
-        async fn get_os(&self) -> Result<String, AppError>;
+    mock! {
+        OSOperations {}
+        #[async_trait]
+        impl OSOperations for OSOperations {
+            async fn get_os(&self) -> Result<String, AppError>;
+        }
     }
-}
 
-#[cfg(test)]
-mock! {
-    ShellExecutor {}
-    #[async_trait]
-    impl ShellExecutor for ShellExecutor {
-        async fn execute(&self, command: &str) -> Result<String, AppError>;
-        async fn output(&self, command: &str) -> Result<std::process::Output, AppError>;
-        fn stderr(&self, output: &std::process::Output) -> String;
+    mock! {
+        ShellExecutor {}
+        #[async_trait]
+        impl ShellExecutor for ShellExecutor {
+            async fn execute(&self, command: &str) -> Result<String, AppError>;
+            async fn output(&self, command: &str) -> Result<std::process::Output, AppError>;
+            fn stderr(&self, output: &std::process::Output) -> String;
+        }
     }
-}
 
-#[cfg(test)]
-mock! {
-    PromptOperations {}
-    #[async_trait]
-    impl PromptOperations for PromptOperations {
-        async fn confirm_action(&self, message: &str) -> Result<bool, AppError>;
+    mock! {
+        PromptOperations {}
+        #[async_trait]
+        impl PromptOperations for PromptOperations {
+            async fn confirm_action(&self, message: &str) -> Result<bool, AppError>;
+        }
     }
-}
 
-#[tokio::test]
-async fn test_load() {
-    let mut mock_link_ops = MockLinkOperations::new();
-    let mut mock_path_ops = MockPathOperations::new();
-    let mut mock_toml_ops = MockTomlOperations::new();
-    let mut mock_os_ops = MockOSOperations::new();
-    let mock_shell = MockShellExecutor::new();
-    let mut mock_prompt_ops = MockPromptOperations::new();
+    #[tokio::test]
+    async fn test_load() {
+        let mut mock_link_ops = MockLinkOperations::new();
+        let mut mock_path_ops = MockPathOperations::new();
+        let mut mock_toml_ops = MockTomlOperations::new();
+        let mut mock_os_ops = MockOSOperations::new();
+        let mock_shell = MockShellExecutor::new();
+        let mut mock_prompt_ops = MockPromptOperations::new();
 
-    mock_path_ops
-        .expect_parse_path()
-        .returning(|path| Ok(path.to_path_buf()));
+        mock_path_ops
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
 
-    mock_toml_ops
-        .expect_parse()
-        .returning(|_| Ok(Config::default()));
+        mock_toml_ops
+            .expect_parse()
+            .returning(|_| Ok(Config::default()));
 
-    mock_os_ops
-        .expect_get_os()
-        .returning(|| Ok("macos".to_string()));
+        mock_os_ops
+            .expect_get_os()
+            .returning(|| Ok("macos".to_string()));
 
-    mock_prompt_ops
-        .expect_confirm_action()
-        .returning(|_| Ok(true));
+        mock_prompt_ops
+            .expect_confirm_action()
+            .returning(|_| Ok(true));
 
-    mock_link_ops
-        .expect_link_recursively()
-        .returning(|_, _| Ok(vec![]));
+        mock_link_ops
+            .expect_link_recursively()
+            .returning(|_, _| Ok(vec![]));
 
-    let load_service = LoadServiceImpl::new(
-        Arc::new(mock_link_ops),
-        Arc::new(mock_path_ops),
-        Arc::new(mock_toml_ops),
-        Arc::new(mock_os_ops),
-        Arc::new(mock_shell),
-        Arc::new(mock_prompt_ops),
-    );
+        let load_service = LoadServiceImpl::new(
+            Arc::new(mock_link_ops),
+            Arc::new(mock_path_ops),
+            Arc::new(mock_toml_ops),
+            Arc::new(mock_os_ops),
+            Arc::new(mock_shell),
+            Arc::new(mock_prompt_ops),
+        );
 
-    let result = load_service
-        .load(Path::new("/config.toml"), Path::new("/target"))
-        .await;
+        let result = load_service
+            .load(Path::new("/config.toml"), Path::new("/target"))
+            .await;
 
-    assert!(result.is_ok());
-}
+        assert!(result.is_ok());
+    }
 
-#[tokio::test]
-async fn test_load_with_provision() {
-    let mock_link_ops = MockLinkOperations::new();
-    let mut mock_path_ops = MockPathOperations::new();
-    let mut mock_toml_ops = MockTomlOperations::new();
-    let mut mock_os_ops = MockOSOperations::new();
-    let mut mock_shell = MockShellExecutor::new();
-    let mut mock_prompt_ops = MockPromptOperations::new();
+    #[tokio::test]
+    async fn test_load_with_provision() {
+        let mock_link_ops = MockLinkOperations::new();
+        let mut mock_path_ops = MockPathOperations::new();
+        let mut mock_toml_ops = MockTomlOperations::new();
+        let mut mock_os_ops = MockOSOperations::new();
+        let mut mock_shell = MockShellExecutor::new();
+        let mut mock_prompt_ops = MockPromptOperations::new();
 
-    mock_path_ops
-        .expect_parse_path()
-        .returning(|path| Ok(path.to_path_buf()));
+        mock_path_ops
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
 
-    mock_toml_ops.expect_parse().returning(|_| {
-        Ok(Config {
-            provision: Some(vec![crate::models::config::Provision {
-                mode: "macos".to_string(),
-                script: "echo 'Hello, World!'".to_string(),
-            }]),
-            ..Default::default()
-        })
-    });
+        mock_toml_ops.expect_parse().returning(|_| {
+            Ok(Config {
+                provision: Some(vec![crate::models::config::Provision {
+                    mode: "macos".to_string(),
+                    script: "echo 'Hello, World!'".to_string(),
+                }]),
+                ..Default::default()
+            })
+        });
 
-    mock_os_ops
-        .expect_get_os()
-        .returning(|| Ok("macos".to_string()));
+        mock_os_ops
+            .expect_get_os()
+            .returning(|| Ok("macos".to_string()));
 
-    mock_prompt_ops
-        .expect_confirm_action()
-        .returning(|_| Ok(true));
+        mock_prompt_ops
+            .expect_confirm_action()
+            .returning(|_| Ok(true));
 
-    mock_shell
-        .expect_execute()
-        .returning(|_| Ok("Provision executed successfully".to_string()));
+        mock_shell
+            .expect_execute()
+            .returning(|_| Ok("Provision executed successfully".to_string()));
 
-    let load_service = LoadServiceImpl::new(
-        Arc::new(mock_link_ops),
-        Arc::new(mock_path_ops),
-        Arc::new(mock_toml_ops),
-        Arc::new(mock_os_ops),
-        Arc::new(mock_shell),
-        Arc::new(mock_prompt_ops),
-    );
+        let load_service = LoadServiceImpl::new(
+            Arc::new(mock_link_ops),
+            Arc::new(mock_path_ops),
+            Arc::new(mock_toml_ops),
+            Arc::new(mock_os_ops),
+            Arc::new(mock_shell),
+            Arc::new(mock_prompt_ops),
+        );
 
-    let result = load_service
-        .load(Path::new("/config.toml"), Path::new("/target"))
-        .await;
+        let result = load_service
+            .load(Path::new("/config.toml"), Path::new("/target"))
+            .await;
 
-    assert!(result.is_ok());
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_load_with_invalid_config() {
+        let mock_link_ops = MockLinkOperations::new();
+        let mock_path_ops = MockPathOperations::new();
+        let mut mock_toml_ops = MockTomlOperations::new();
+        let mock_os_ops = MockOSOperations::new();
+        let mock_shell = MockShellExecutor::new();
+        let mock_prompt_ops = MockPromptOperations::new();
+
+        mock_toml_ops
+            .expect_parse()
+            .returning(|_| Err(AppError::TomlParse(toml::de::Error::custom("Invalid TOML"))));
+
+        let load_service = LoadServiceImpl::new(
+            Arc::new(mock_link_ops),
+            Arc::new(mock_path_ops),
+            Arc::new(mock_toml_ops),
+            Arc::new(mock_os_ops),
+            Arc::new(mock_shell),
+            Arc::new(mock_prompt_ops),
+        );
+
+        let result = load_service
+            .load(Path::new("/config.toml"), Path::new("/target"))
+            .await;
+
+        println!("{:?}", result);
+        assert!(matches!(result, Err(AppError::TomlParse(_))));
+    }
+
+    #[tokio::test]
+    async fn test_load_with_provision_different_os() {
+        let mock_link_ops = MockLinkOperations::new();
+        let mut mock_path_ops = MockPathOperations::new();
+        let mut mock_toml_ops = MockTomlOperations::new();
+        let mut mock_os_ops = MockOSOperations::new();
+        let mock_shell = MockShellExecutor::new();
+        let mock_prompt_ops = MockPromptOperations::new();
+
+        mock_path_ops
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
+
+        mock_toml_ops.expect_parse().returning(|_| {
+            Ok(Config {
+                provision: Some(vec![crate::models::config::Provision {
+                    mode: "linux".to_string(),
+                    script: "echo 'Hello, World!'".to_string(),
+                }]),
+                ..Default::default()
+            })
+        });
+
+        mock_os_ops
+            .expect_get_os()
+            .returning(|| Ok("macos".to_string()));
+
+        let load_service = LoadServiceImpl::new(
+            Arc::new(mock_link_ops),
+            Arc::new(mock_path_ops),
+            Arc::new(mock_toml_ops),
+            Arc::new(mock_os_ops),
+            Arc::new(mock_shell),
+            Arc::new(mock_prompt_ops),
+        );
+
+        let result = load_service
+            .load(Path::new("/config.toml"), Path::new("/target"))
+            .await;
+
+        assert!(result.is_ok());
+    }
 }
