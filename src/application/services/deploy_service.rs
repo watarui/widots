@@ -276,38 +276,35 @@ mod test {
 
         let deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
 
-        // Create a temporary directory for the test
+        // テスト用の一時ディレクトリを作成
         let temp_dir = tempfile::tempdir().unwrap();
         let temp_path = temp_dir.path();
 
-        // Mock the fs operations
-        let old_fish_completions_target_dir = FISH_COMPLETIONS_TARGET_DIR;
-        let old_fish_completions_source_path = FISH_COMPLETIONS_SOURCE_PATH;
+        // 環境変数の元の値を保存
+        let old_fish_completions_target_dir = std::env::var("FISH_COMPLETIONS_TARGET_DIR").ok();
+        let old_fish_completions_source_path = std::env::var("FISH_COMPLETIONS_SOURCE_PATH").ok();
 
-        // Temporarily replace the constant values with our test paths
+        // 環境変数を一時的に変更
         std::env::set_var("FISH_COMPLETIONS_TARGET_DIR", temp_path.join("completions"));
         std::env::set_var(
             "FISH_COMPLETIONS_SOURCE_PATH",
             temp_path.join("source.fish"),
         );
 
-        // Run the execute method
+        // テストの実行
         let result = deploy_service.execute().await;
 
-        // Reset the constant values
-        std::env::set_var(
-            "FISH_COMPLETIONS_TARGET_DIR",
-            old_fish_completions_target_dir,
-        );
-        std::env::set_var(
-            "FISH_COMPLETIONS_SOURCE_PATH",
-            old_fish_completions_source_path,
-        );
+        // 環境変数を元に戻す
+        match old_fish_completions_target_dir {
+            Some(val) => std::env::set_var("FISH_COMPLETIONS_TARGET_DIR", val),
+            None => std::env::remove_var("FISH_COMPLETIONS_TARGET_DIR"),
+        }
+        match old_fish_completions_source_path {
+            Some(val) => std::env::set_var("FISH_COMPLETIONS_SOURCE_PATH", val),
+            None => std::env::remove_var("FISH_COMPLETIONS_SOURCE_PATH"),
+        }
 
-        // Check the result
         assert!(result.is_ok());
-
-        // The temporary directory will be automatically cleaned up when it goes out of scope
     }
 
     #[tokio::test]
