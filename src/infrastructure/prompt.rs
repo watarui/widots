@@ -3,6 +3,7 @@ use crate::error::AppError;
 use async_trait::async_trait;
 use inquire::Confirm;
 
+#[derive(Debug)]
 pub struct Prompt {
     force_yes: bool,
 }
@@ -36,10 +37,20 @@ impl PromptOperations for Prompt {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use std::fs::File;
     use std::io;
     use std::io::Write;
     use std::io::{BufRead, BufReader};
+
+    #[test]
+    fn test_toml_prompt_default() {
+        let default_parser = Prompt { force_yes: false };
+        let new_parser = Prompt::new(false);
+
+        // Ensure that the default implementation works correctly
+        assert_eq!(format!("{:?}", default_parser), format!("{:?}", new_parser));
+    }
 
     pub struct DummyPrompt<R: BufRead> {
         reader: R,

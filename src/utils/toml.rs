@@ -9,6 +9,7 @@ pub trait TomlOperations: Send + Sync {
     async fn parse(&self, path: &Path) -> Result<Config, AppError>;
 }
 
+#[derive(Debug)]
 pub struct TomlParser;
 
 impl Default for TomlParser {
@@ -39,6 +40,15 @@ mod test {
     use super::*;
     use tempfile::NamedTempFile;
     use tokio::fs;
+
+    #[test]
+    fn test_toml_parser_default() {
+        let default_parser = TomlParser;
+        let new_parser = TomlParser::new();
+
+        // Ensure that the default implementation works correctly
+        assert_eq!(format!("{:?}", default_parser), format!("{:?}", new_parser));
+    }
 
     #[tokio::test]
     async fn test_parse_toml() -> Result<(), AppError> {

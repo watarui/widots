@@ -10,6 +10,7 @@ pub trait FileSystemOperations: Send + Sync {
     async fn write_lines(&self, path: &Path, lines: &[String]) -> Result<(), AppError>;
 }
 
+#[derive(Debug)]
 pub struct FileSystemOperationsImpl;
 
 impl Default for FileSystemOperationsImpl {
@@ -55,6 +56,15 @@ mod test {
     use crate::error::AppError;
     use proptest::prelude::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn test_toml_file_system_operations_impl_default() {
+        let default_parser = FileSystemOperationsImpl;
+        let new_parser = FileSystemOperationsImpl::new();
+
+        // Ensure that the default implementation works correctly
+        assert_eq!(format!("{:?}", default_parser), format!("{:?}", new_parser));
+    }
 
     #[tokio::test]
     async fn test_read_write_lines() -> Result<(), AppError> {

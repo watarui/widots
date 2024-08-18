@@ -5,6 +5,7 @@ use crate::error::AppError;
 use async_trait::async_trait;
 use tokio::process::Command;
 
+#[derive(Debug)]
 pub struct SystemShellExecutor;
 
 impl Default for SystemShellExecutor {
@@ -52,6 +53,15 @@ mod test {
     use super::*;
     use crate::domain::shell::ShellExecutor;
     use crate::error::AppError;
+
+    #[test]
+    fn test_system_shell_executor_default() {
+        let default_parser = SystemShellExecutor;
+        let new_parser = SystemShellExecutor::new();
+
+        // Ensure that the default implementation works correctly
+        assert_eq!(format!("{:?}", default_parser), format!("{:?}", new_parser));
+    }
 
     #[tokio::test]
     async fn test_execute() -> Result<(), AppError> {

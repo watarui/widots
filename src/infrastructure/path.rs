@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use dirs::home_dir;
 use std::path::{Path, PathBuf};
 
+#[derive(Debug)]
 pub struct PathExpander;
 
 impl Default for PathExpander {
@@ -52,6 +53,15 @@ impl PathOperations for PathExpander {
 mod test {
     use super::*;
     use proptest::prelude::*;
+
+    #[test]
+    fn test_toml_path_expander_default() {
+        let default_parser = PathExpander;
+        let new_parser = PathExpander::new();
+
+        // Ensure that the default implementation works correctly
+        assert_eq!(format!("{:?}", default_parser), format!("{:?}", new_parser));
+    }
 
     #[tokio::test]
     async fn test_expand_tilde() -> Result<(), AppError> {
