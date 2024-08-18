@@ -69,20 +69,31 @@ impl DeployServiceImpl {
 #[async_trait]
 impl DeployService for DeployServiceImpl {
     async fn execute(&self) -> Result<(), AppError> {
+        println!("Starting deployment process...");
+
         println!("Building the project in release mode...");
         let output = self.shell_executor.output("cargo build --release").await?;
         if !output.status.success() {
-            return Err(AppError::Deployment(self.shell_executor.stderr(&output)));
+            let error = self.shell_executor.stderr(&output);
+            println!("Build failed. Error: {}", error);
+            return Err(AppError::Deployment(error));
         }
 
         println!("Deploying the executable...");
-        self.deploy_executable().await?;
+        if let Err(e) = self.deploy_executable().await {
+            println!("Deployment failed. Error: {:?}", e);
+            return Err(e);
+        }
         println!("Deployment successful!");
 
         println!("Locating fish shell command completion files...");
-        self.locate_fish_completions().await?;
+        if let Err(e) = self.locate_fish_completions().await {
+            println!("Locating fish completions failed. Error: {:?}", e);
+            return Err(e);
+        }
         println!("Locate successful!");
 
+        println!("Deployment process completed successfully.");
         Ok(())
     }
 }
