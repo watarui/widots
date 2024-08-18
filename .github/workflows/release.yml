@@ -17,20 +17,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Generate a changelog
-        uses: orhun/git-cliff-action@v3
-        with:
-          config: cliff.toml
-          args: --verbose
-        env:
-          OUTPUT: CHANGELOG.md
-          GITHUB_REPO: ${{ github.repository }}
-
-      - name: Display changelog
-        run: cat CHANGELOG.md
 
       - name: Create Release
         id: create_release
@@ -40,7 +26,7 @@ jobs:
         with:
           tag_name: ${{ github.ref }}
           release_name: Release ${{ github.ref }}
-          body_path: CHANGELOG.md
+          body: "Release ${{ github.ref }}"
           draft: false
           prerelease: false
 
@@ -76,27 +62,3 @@ jobs:
           asset_path: ./target/release/widots
           asset_name: widots-${{ runner.os == 'macOS' && 'darwin' || 'linux' }}-${{ github.ref_name }}
           asset_content_type: application/octet-stream
-
-  update_release:
-    name: Update Release
-    needs: [create_release, build_and_upload]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Generate changelog
-        id: git-cliff
-        uses: orhun/git-cliff-action@v2
-        with:
-          config: cliff.toml
-          args: --verbose --output CHANGELOG.md
-
-      - name: Update release with changelog
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          body_path: CHANGELOG.md
-          token: ${{ secrets.GITHUB_TOKEN }}
