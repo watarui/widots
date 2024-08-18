@@ -128,14 +128,6 @@ mod test {
     }
 
     #[test]
-    fn test_file_system_operations_impl_new_and_default() {
-        let new_fs_ops = FileSystemOperationsImpl::new();
-        let default_fs_ops = FileSystemOperationsImpl;
-
-        assert_eq!(format!("{:?}", new_fs_ops), format!("{:?}", default_fs_ops));
-    }
-
-    #[test]
     fn test_toml_file_system_operations_impl_default() {
         let default_parser = FileSystemOperationsImpl;
         let new_parser = FileSystemOperationsImpl::new();
@@ -170,7 +162,7 @@ mod test {
         #[test]
         fn test_write_read_lines_roundtrip(lines in prop::collection::vec(String::arbitrary(), 0..100)) {
             let rt = tokio::runtime::Runtime::new().unwrap();
-            let _ = rt.block_on(async {
+            rt.block_on(async {
                 let temp_dir = TempDir::new().unwrap();
                 let file_path = temp_dir.path().join("test.txt");
                 let fs_ops = FileSystemOperationsImpl::new();
@@ -180,7 +172,7 @@ mod test {
 
                 prop_assert_eq!(lines, read_lines);
                 Ok(())
-            });
+            }).unwrap();
         }
 
         #[test]

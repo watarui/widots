@@ -115,14 +115,14 @@ mod test {
                 .prop_map(|components| PathBuf::from("~").join(components.join("/")))
         ) {
             let rt = tokio::runtime::Runtime::new().unwrap();
-            let _ = rt.block_on(async {
+            rt.block_on(async {
                 let path_expander = PathExpander::new();
                 let expanded_once = path_expander.expand_tilde(&path).await.unwrap();
                 let expanded_twice = path_expander.expand_tilde(&expanded_once).await.unwrap();
 
                 prop_assert_eq!(expanded_once, expanded_twice);
                 Ok(())
-            });
+            }).unwrap();
         }
 
         #[test]
@@ -131,14 +131,14 @@ mod test {
                 .prop_map(|components| PathBuf::from("/").join(components.join("/")))
         ) {
             let rt = tokio::runtime::Runtime::new().unwrap();
-            let _ = rt.block_on(async {
+            rt.block_on(async {
                 let path_expander = PathExpander::new();
                 let parsed_once = path_expander.parse_path(&path).await.unwrap();
                 let parsed_twice = path_expander.parse_path(&parsed_once).await.unwrap();
 
                 prop_assert_eq!(parsed_once, parsed_twice);
                 Ok(())
-            });
+            }).unwrap();
         }
     }
 
