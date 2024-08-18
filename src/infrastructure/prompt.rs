@@ -38,10 +38,22 @@ impl PromptOperations for Prompt {
 #[cfg(test)]
 mod test {
     use super::*;
+    use mockall::*;
+    use predicate::eq;
+    use proptest::prelude::*;
     use std::fs::File;
     use std::io;
     use std::io::Write;
     use std::io::{BufRead, BufReader};
+
+    mock! {
+        pub Prompt {}
+
+        #[async_trait]
+        impl PromptOperations for Prompt {
+            async fn confirm_action(&self, message: &str) -> Result<bool, AppError>;
+        }
+    }
 
     #[test]
     fn test_toml_prompt_default() {
@@ -85,5 +97,46 @@ mod test {
 
         assert!(result);
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_confirm_action_force_yes() {
+        let prompt = Prompt::new(true);
+        let result = prompt.confirm_action("Test action").await.unwrap();
+        assert!(result);
+    }
+
+    #[tokio::test]
+    async fn test_confirm_action_with_mock() {
+        let mut mock = MockPrompt::new();
+        mock.expect_confirm_action()
+            .with(eq("Test action"))
+            .times(1)
+            .returning(|_| Ok(true));
+
+        let result = mock.confirm_action("Test action").await.unwrap();
+        assert!(result);
+    }
+
+    proptest! {
+        #[test]
+        fn test_confirm_action_with_various_messages(message in "[a-zA-Z0-9 ]{1,50}") {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let prompt = Prompt::new(true);
+                let result = prompt.confirm_action(&message).await;
+                prop_assert!(result.is_ok(), "confirm_action failed");
+                prop_assert!(result.unwrap(), "confirm_action returned false when force_yes is true");
+                Ok(())
+            }).unwrap()
+        }
+    }
+
+    #[test]
+    fn test_prompt_new_and_default() {
+        let new_prompt = Prompt::new(false);
+        let default_prompt = Prompt::default();
+
+        assert_eq!(format!("{:?}", new_prompt), format!("{:?}", default_prompt));
     }
 }
