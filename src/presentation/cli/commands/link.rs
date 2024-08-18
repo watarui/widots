@@ -4,6 +4,10 @@ use crate::error::AppError;
 use crate::models::link::FileProcessResult;
 use clap::{Args, ValueHint};
 use std::path::PathBuf;
+use std::sync::LazyLock;
+use std::sync::Mutex;
+
+static TEST_OUTPUT: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
 #[derive(Args)]
 pub struct LinkArgs {
@@ -38,13 +42,28 @@ pub async fn execute(args: LinkArgs, services: &dyn ServiceProvider) -> Result<(
     for result in results {
         match result {
             FileProcessResult::Linked(src, dst) => {
-                println!("Linked: {} -> {}", src.display(), dst.display());
+                let output = format!("Linked: {} -> {}", src.display(), dst.display());
+                if std::env::var("TEST_MODE").is_ok() {
+                    TEST_OUTPUT.lock().unwrap().push(output);
+                } else {
+                    println!("{}", output);
+                }
             }
             FileProcessResult::Created(path) => {
-                println!("Created directory: {}", path.display());
+                let output = format!("Created directory: {}", path.display());
+                if std::env::var("TEST_MODE").is_ok() {
+                    TEST_OUTPUT.lock().unwrap().push(output);
+                } else {
+                    println!("{}", output);
+                }
             }
             FileProcessResult::Skipped(path) => {
-                println!("Skipped: {}", path.display());
+                let output = format!("Skipped: {}", path.display());
+                if std::env::var("TEST_MODE").is_ok() {
+                    TEST_OUTPUT.lock().unwrap().push(output);
+                } else {
+                    println!("{}", output);
+                }
             }
             FileProcessResult::Materialized(_, _) => {} // This should not occur during linking
         }
@@ -55,6 +74,7 @@ pub async fn execute(args: LinkArgs, services: &dyn ServiceProvider) -> Result<(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::application::service_provider::ServiceProvider;
     use crate::application::services::brew_service::BrewService;
     use crate::application::services::deploy_service::DeployService;
@@ -86,7 +106,9 @@ mod tests {
         }
     }
 
-    struct CustomMockLinkService;
+    struct CustomMockLinkService {
+        results: Vec<FileProcessResult>,
+    }
 
     #[async_trait]
     impl LinkService for CustomMockLinkService {
@@ -95,7 +117,7 @@ mod tests {
             _source: &Path,
             _target: &Path,
         ) -> Result<Vec<FileProcessResult>, AppError> {
-            Ok(vec![])
+            Ok(self.results.clone())
         }
 
         async fn materialize_dotfiles(
@@ -168,10 +190,10 @@ mod tests {
     }
 
     impl CustomMockServiceProvider {
-        fn new() -> Self {
+        fn new(link_service: Arc<dyn LinkService>) -> Self {
             CustomMockServiceProvider {
                 brew_service: Arc::new(CustomMockBrewService) as Arc<dyn BrewService>,
-                link_service: Arc::new(CustomMockLinkService) as Arc<dyn LinkService>,
+                link_service,
                 load_service: Arc::new(CustomMockLoadService) as Arc<dyn LoadService>,
                 deploy_service: Arc::new(CustomMockDeployService) as Arc<dyn DeployService>,
                 fish_service: Arc::new(CustomMockFishService) as Arc<dyn FishService>,
@@ -208,7 +230,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_link_dotfiles() {
-        let mock_services = Arc::new(CustomMockServiceProvider::new()) as Arc<dyn ServiceProvider>;
+        let mock_services = Arc::new(CustomMockServiceProvider::new(Arc::new(
+            CustomMockLinkService {
+                results: vec![FileProcessResult::Linked(
+                    PathBuf::from("/src/file"),
+                    PathBuf::from("/dst/file"),
+                )],
+            },
+        ))) as Arc<dyn ServiceProvider>;
 
         let args = LinkArgs {
             source_path: PathBuf::new(),
@@ -220,7 +249,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_link_dotfiles_with_test() {
-        let mock_services = Arc::new(CustomMockServiceProvider::new()) as Arc<dyn ServiceProvider>;
+        let mock_services = Arc::new(CustomMockServiceProvider::new(Arc::new(
+            CustomMockLinkService {
+                results: vec![FileProcessResult::Linked(
+                    PathBuf::from("/src/file"),
+                    PathBuf::from("/dst/file"),
+                )],
+            },
+        ))) as Arc<dyn ServiceProvider>;
 
         let args = LinkArgs {
             source_path: PathBuf::new(),
@@ -228,5 +264,51 @@ mod tests {
         };
         let result = execute(args, mock_services.as_ref()).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_execute_link_dotfiles_with_various_results() {
+        let mock_link_service = Arc::new(CustomMockLinkService {
+            results: vec![
+                FileProcessResult::Linked(PathBuf::from("/src/file1"), PathBuf::from("/dst/file1")),
+                FileProcessResult::Created(PathBuf::from("/dst/dir1")),
+                FileProcessResult::Skipped(PathBuf::from("/src/file2")),
+                FileProcessResult::Materialized(
+                    PathBuf::from("/src/file3"),
+                    PathBuf::from("/dst/file3"),
+                ),
+            ],
+        });
+        let mock_services = Arc::new(CustomMockServiceProvider::new(
+            Arc::clone(&mock_link_service) as Arc<dyn LinkService>,
+        )) as Arc<dyn ServiceProvider>;
+
+        let args = LinkArgs {
+            source_path: PathBuf::new(),
+            test: true,
+        };
+
+        // Set environment variable to enable test mode
+        std::env::set_var("TEST_MODE", "1");
+
+        // Clear previous test output
+        TEST_OUTPUT.lock().unwrap().clear();
+
+        // Execute the function
+        let result = execute(args, mock_services.as_ref()).await;
+        assert!(result.is_ok());
+
+        // Get the captured output
+        let output = TEST_OUTPUT.lock().unwrap().join("\n");
+
+        // Unset environment variable
+        std::env::remove_var("TEST_MODE");
+
+        // Assert the output contains the expected messages
+        assert!(output.contains("Linked: /src/file1 -> /dst/file1"));
+        assert!(output.contains("Created directory: /dst/dir1"));
+        assert!(output.contains("Skipped: /src/file2"));
+        // Materialized case should not produce any output
+        assert!(!output.contains("Materialized"));
     }
 }
