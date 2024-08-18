@@ -59,6 +59,7 @@ mod test {
     use std::process::Command as StdCommand;
     use std::process::Output;
     use tokio::process::Command as TokioCommand;
+    use tokio::time::{timeout, Duration};
 
     mock! {
         pub SystemShellExecutor {}
@@ -127,23 +128,31 @@ mod test {
 
     proptest! {
         #[test]
-        fn test_execute_with_various_commands(command in "[a-zA-Z0-9 ]{1,50}") {
+        fn test_execute_with_safe_commands(command in "(echo|ls|pwd|whoami|date) [a-zA-Z0-9 ]{0,20}") {
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async {
                 let executor = SystemShellExecutor::new();
-                let result = executor.execute(&command).await;
-                prop_assert!(result.is_ok() || result.is_err(), "execute neither succeeded nor failed");
+                let result = timeout(Duration::from_secs(5), executor.execute(&command)).await;
+                match result {
+                    Ok(Ok(_)) => prop_assert!(true, "Command executed successfully"),
+                    Ok(Err(e)) => prop_assert!(true, "Command failed with error: {:?}", e),
+                    Err(_) => prop_assert!(false, "Command execution timed out"),
+                }
                 Ok(())
             }).unwrap();
         }
 
         #[test]
-        fn test_output_with_various_commands(command in "[a-zA-Z0-9 ]{1,50}") {
+        fn test_output_with_safe_commands(command in "(echo|ls|pwd|whoami|date) [a-zA-Z0-9 ]{0,20}") {
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async {
                 let executor = SystemShellExecutor::new();
-                let result = executor.output(&command).await;
-                prop_assert!(result.is_ok() || result.is_err(), "output neither succeeded nor failed");
+                let result = timeout(Duration::from_secs(5), executor.output(&command)).await;
+                match result {
+                    Ok(Ok(_)) => prop_assert!(true, "Command executed successfully"),
+                    Ok(Err(e)) => prop_assert!(true, "Command failed with error: {:?}", e),
+                    Err(_) => prop_assert!(false, "Command execution timed out"),
+                }
                 Ok(())
             }).unwrap();
         }
