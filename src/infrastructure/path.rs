@@ -52,7 +52,21 @@ impl PathOperations for PathExpander {
 #[cfg(test)]
 mod test {
     use super::*;
+    use mockall::predicate::*;
+    use mockall::*;
     use proptest::prelude::*;
+    use std::path::PathBuf;
+
+    mock! {
+        pub PathExpander {}
+
+        #[async_trait]
+        impl PathOperations for PathExpander {
+            async fn expand_tilde(&self, path: &Path) -> Result<PathBuf, AppError>;
+            async fn parse_path(&self, path: &Path) -> Result<PathBuf, AppError>;
+            async fn get_home_dir(&self) -> Result<PathBuf, AppError>;
+        }
+    }
 
     #[test]
     fn test_toml_path_expander_default() {
@@ -125,6 +139,76 @@ mod test {
                 prop_assert_eq!(parsed_once, parsed_twice);
                 Ok(())
             });
+        }
+    }
+
+    #[tokio::test]
+    async fn test_expand_tilde_with_mock() {
+        let mut mock = MockPathExpander::new();
+        mock.expect_expand_tilde()
+            .with(eq(Path::new("~/test")))
+            .times(1)
+            .returning(|_| Ok(PathBuf::from("/home/user/test")));
+
+        let result = mock.expand_tilde(Path::new("~/test")).await;
+        assert_eq!(result.unwrap(), PathBuf::from("/home/user/test"));
+    }
+
+    #[tokio::test]
+    async fn test_parse_path_with_mock() {
+        let mut mock = MockPathExpander::new();
+        mock.expect_parse_path()
+            .with(eq(Path::new("/tmp/test")))
+            .times(1)
+            .returning(|_| Ok(PathBuf::from("/tmp/test")));
+
+        let result = mock.parse_path(Path::new("/tmp/test")).await;
+        assert_eq!(result.unwrap(), PathBuf::from("/tmp/test"));
+    }
+
+    #[tokio::test]
+    async fn test_get_home_dir_error() {
+        let mut mock = MockPathExpander::new();
+        mock.expect_get_home_dir()
+            .times(1)
+            .returning(|| Err(AppError::DirectoryNotFound));
+
+        let result = mock.get_home_dir().await;
+        assert!(matches!(result, Err(AppError::DirectoryNotFound)));
+    }
+
+    fn arb_tilde_path() -> impl Strategy<Value = PathBuf> {
+        "[a-zA-Z0-9_/.]{0,20}".prop_map(|s| PathBuf::from(format!("~/{}", s)))
+    }
+
+    fn arb_absolute_path() -> impl Strategy<Value = PathBuf> {
+        "[a-zA-Z0-9_/.]{0,20}".prop_map(|s| PathBuf::from(format!("/{}", s)))
+    }
+
+    proptest! {
+        #[test]
+        fn test_expand_tilde_with_various_inputs(path in arb_tilde_path()) {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let expander = PathExpander::new();
+                let result = expander.expand_tilde(&path).await;
+                prop_assert!(result.is_ok(), "expand_tilde failed");
+                let expanded = result.unwrap();
+                prop_assert!(!expanded.to_str().unwrap().contains('~'), "expanded path still contains tilde");
+                prop_assert!(expanded.is_absolute(), "expanded path is not absolute");
+                Ok(())
+            }).unwrap();
+        }
+
+        #[test]
+        fn test_parse_path_with_various_inputs(path in arb_absolute_path()) {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let expander = PathExpander::new();
+                let result = expander.parse_path(&path).await;
+                prop_assert!(result.is_ok(), "parse_path failed");
+                Ok(())
+            }).unwrap();
         }
     }
 }
