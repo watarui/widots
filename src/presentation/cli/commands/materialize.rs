@@ -3,6 +3,9 @@ use crate::error::AppError;
 use crate::models::link::FileProcessResult;
 use clap::{Args, ValueHint};
 use std::path::PathBuf;
+use std::sync::{LazyLock, Mutex};
+
+static TEST_OUTPUT: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
 #[derive(Args)]
 pub struct MaterializeArgs {
@@ -25,11 +28,16 @@ pub async fn execute(
 
     for result in results {
         if let FileProcessResult::Materialized(path, original) = result {
-            println!(
+            let output = format!(
                 "Materialized: {} (was linked to {})",
                 path.display(),
                 original.display()
             );
+            if std::env::var("TEST_MODE").is_ok() {
+                TEST_OUTPUT.lock().unwrap().push(output);
+            } else {
+                println!("{}", output);
+            }
         }
     }
 
@@ -38,6 +46,7 @@ pub async fn execute(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::application::service_provider::ServiceProvider;
     use crate::application::services::brew_service::BrewService;
     use crate::application::services::deploy_service::DeployService;
@@ -69,7 +78,9 @@ mod tests {
         }
     }
 
-    struct CustomMockLinkService;
+    struct CustomMockLinkService {
+        materialize_result: Vec<FileProcessResult>,
+    }
 
     #[async_trait]
     impl LinkService for CustomMockLinkService {
@@ -85,7 +96,7 @@ mod tests {
             &self,
             _target: &Path,
         ) -> Result<Vec<FileProcessResult>, AppError> {
-            Ok(vec![])
+            Ok(self.materialize_result.clone())
         }
     }
 
@@ -151,10 +162,10 @@ mod tests {
     }
 
     impl CustomMockServiceProvider {
-        fn new() -> Self {
+        fn new(link_service: Arc<dyn LinkService>) -> Self {
             CustomMockServiceProvider {
                 brew_service: Arc::new(CustomMockBrewService) as Arc<dyn BrewService>,
-                link_service: Arc::new(CustomMockLinkService) as Arc<dyn LinkService>,
+                link_service,
                 load_service: Arc::new(CustomMockLoadService) as Arc<dyn LoadService>,
                 deploy_service: Arc::new(CustomMockDeployService) as Arc<dyn DeployService>,
                 fish_service: Arc::new(CustomMockFishService) as Arc<dyn FishService>,
@@ -191,12 +202,54 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_materialize_dotfiles() {
-        let mock_services = Arc::new(CustomMockServiceProvider::new()) as Arc<dyn ServiceProvider>;
+        let mock_link_service = Arc::new(CustomMockLinkService {
+            materialize_result: vec![],
+        });
+        let mock_services = Arc::new(CustomMockServiceProvider::new(
+            Arc::clone(&mock_link_service) as Arc<dyn LinkService>,
+        )) as Arc<dyn ServiceProvider>;
 
         let args = MaterializeArgs {
             target: PathBuf::new(),
         };
         let result = execute(args, mock_services.as_ref()).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_execute_materialize_dotfiles_with_result() {
+        let mock_link_service = Arc::new(CustomMockLinkService {
+            materialize_result: vec![FileProcessResult::Materialized(
+                PathBuf::from("/home/user/.bashrc"),
+                PathBuf::from("/dotfiles/.bashrc"),
+            )],
+        });
+        let mock_services = Arc::new(CustomMockServiceProvider::new(
+            Arc::clone(&mock_link_service) as Arc<dyn LinkService>,
+        )) as Arc<dyn ServiceProvider>;
+
+        let args = MaterializeArgs {
+            target: PathBuf::new(),
+        };
+
+        // Set environment variable to enable test mode
+        std::env::set_var("TEST_MODE", "1");
+
+        // Clear previous test output
+        TEST_OUTPUT.lock().unwrap().clear();
+
+        // Execute the function
+        let result = execute(args, mock_services.as_ref()).await;
+        assert!(result.is_ok());
+
+        // Get the captured output
+        let output = TEST_OUTPUT.lock().unwrap().join("\n");
+
+        // Unset environment variable
+        std::env::remove_var("TEST_MODE");
+
+        assert!(
+            output.contains("Materialized: /home/user/.bashrc (was linked to /dotfiles/.bashrc)")
+        );
     }
 }

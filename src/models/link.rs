@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FileProcessResult {
     Linked(PathBuf, PathBuf),
     Created(PathBuf),
