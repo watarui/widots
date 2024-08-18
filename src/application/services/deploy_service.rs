@@ -194,4 +194,145 @@ mod test {
         let result = deploy_service.locate_fish_completions().await;
         assert!(result.is_err());
     }
+
+    #[tokio::test]
+    async fn test_deploy_executable_success() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mut mock_path = MockPathOperations::new();
+
+        mock_path
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
+
+        mock_shell
+            .expect_execute()
+            .times(2)
+            .returning(|_| Ok("Command executed successfully".to_string()));
+
+        let deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
+
+        let result = deploy_service.deploy_executable().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_locate_fish_completions_success() {
+        let mock_shell = MockShellExecutor::new();
+        let mut mock_path = MockPathOperations::new();
+
+        mock_path
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
+
+        let deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
+
+        // Mock the fs functions
+        tokio::task::spawn_blocking(move || {
+            std::fs::create_dir_all(FISH_COMPLETIONS_TARGET_DIR).unwrap();
+            std::fs::File::create(FISH_COMPLETIONS_SOURCE_PATH).unwrap();
+        })
+        .await
+        .unwrap();
+
+        let result = deploy_service.locate_fish_completions().await;
+        assert!(result.is_ok());
+
+        // Clean up
+        tokio::task::spawn_blocking(move || {
+            std::fs::remove_dir_all(FISH_COMPLETIONS_TARGET_DIR).unwrap();
+            std::fs::remove_file(FISH_COMPLETIONS_SOURCE_PATH).unwrap();
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_execute_success() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mut mock_path = MockPathOperations::new();
+
+        // Mock the cargo build command
+        mock_shell
+            .expect_output()
+            .with(eq("cargo build --release"))
+            .returning(|_| {
+                Ok(std::process::Output {
+                    status: std::process::ExitStatus::from_raw(0),
+                    stdout: vec![],
+                    stderr: vec![],
+                })
+            });
+
+        // Mock the deploy_executable commands
+        mock_shell
+            .expect_execute()
+            .times(2)
+            .returning(|_| Ok("Command executed successfully".to_string()));
+
+        // Mock the path operations
+        mock_path
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
+
+        let deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
+
+        // Create a temporary directory for the test
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Mock the fs operations
+        let old_fish_completions_target_dir = FISH_COMPLETIONS_TARGET_DIR;
+        let old_fish_completions_source_path = FISH_COMPLETIONS_SOURCE_PATH;
+
+        // Temporarily replace the constant values with our test paths
+        std::env::set_var("FISH_COMPLETIONS_TARGET_DIR", temp_path.join("completions"));
+        std::env::set_var(
+            "FISH_COMPLETIONS_SOURCE_PATH",
+            temp_path.join("source.fish"),
+        );
+
+        // Run the execute method
+        let result = deploy_service.execute().await;
+
+        // Reset the constant values
+        std::env::set_var(
+            "FISH_COMPLETIONS_TARGET_DIR",
+            old_fish_completions_target_dir,
+        );
+        std::env::set_var(
+            "FISH_COMPLETIONS_SOURCE_PATH",
+            old_fish_completions_source_path,
+        );
+
+        // Check the result
+        assert!(result.is_ok());
+
+        // The temporary directory will be automatically cleaned up when it goes out of scope
+    }
+
+    #[tokio::test]
+    async fn test_execute_build_failure() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mock_path = MockPathOperations::new();
+
+        mock_shell
+            .expect_output()
+            .with(eq("cargo build --release"))
+            .returning(|_| {
+                Ok(std::process::Output {
+                    status: std::process::ExitStatus::from_raw(1),
+                    stdout: vec![],
+                    stderr: vec![],
+                })
+            });
+
+        mock_shell
+            .expect_stderr()
+            .returning(|_| "Build failed".to_string());
+
+        let deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
+
+        let result = deploy_service.execute().await;
+        assert!(matches!(result, Err(AppError::Deployment(_))));
+    }
 }
