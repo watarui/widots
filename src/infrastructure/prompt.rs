@@ -1,17 +1,9 @@
-#[cfg(test)]
-use std::fs::File;
-#[cfg(test)]
-use std::io;
-#[cfg(test)]
-use std::io::Write;
-#[cfg(test)]
-use std::io::{BufRead, BufReader};
-
 use crate::domain::prompt::PromptOperations;
 use crate::error::AppError;
 use async_trait::async_trait;
 use inquire::Confirm;
 
+#[derive(Debug)]
 pub struct Prompt {
     force_yes: bool,
 }
@@ -44,38 +36,54 @@ impl PromptOperations for Prompt {
 }
 
 #[cfg(test)]
-pub struct DummyPrompt<R: BufRead> {
-    reader: R,
-}
+mod test {
+    use super::*;
+    use std::fs::File;
+    use std::io;
+    use std::io::Write;
+    use std::io::{BufRead, BufReader};
 
-#[cfg(test)]
-impl<R: BufRead> DummyPrompt<R> {
-    pub fn new(reader: R) -> Self {
-        DummyPrompt { reader }
+    #[test]
+    fn test_toml_prompt_default() {
+        let default_parser = Prompt { force_yes: false };
+        let new_parser = Prompt::new(false);
+
+        // Ensure that the default implementation works correctly
+        assert_eq!(format!("{:?}", default_parser), format!("{:?}", new_parser));
     }
 
-    pub fn confirm_action(&mut self, message: &str) -> Result<bool, io::Error> {
-        println!("{}", message);
-        let mut input = String::new();
-        self.reader.read_line(&mut input)?;
-        Ok(input.trim() == "y")
+    pub struct DummyPrompt<R: BufRead> {
+        reader: R,
     }
-}
 
-#[tokio::test]
-async fn test_confirm_action() -> Result<(), io::Error> {
-    // Simulate user input by creating a temporary file for testing
-    let temp_file = tempfile::NamedTempFile::new()?;
-    writeln!(temp_file.as_file(), "y")?;
+    impl<R: BufRead> DummyPrompt<R> {
+        pub fn new(reader: R) -> Self {
+            DummyPrompt { reader }
+        }
 
-    // Emulate standard input
-    let file = File::open(temp_file.path())?;
-    let reader = BufReader::new(file);
+        pub fn confirm_action(&mut self, message: &str) -> Result<bool, io::Error> {
+            println!("{}", message);
+            let mut input = String::new();
+            self.reader.read_line(&mut input)?;
+            Ok(input.trim() == "y")
+        }
+    }
 
-    let mut prompt = DummyPrompt::new(reader);
+    #[tokio::test]
+    async fn test_confirm_action() -> Result<(), io::Error> {
+        // Simulate user input by creating a temporary file for testing
+        let temp_file = tempfile::NamedTempFile::new()?;
+        writeln!(temp_file.as_file(), "y")?;
 
-    let result = prompt.confirm_action("Do you want to continue?")?;
+        // Emulate standard input
+        let file = File::open(temp_file.path())?;
+        let reader = BufReader::new(file);
 
-    assert!(result);
-    Ok(())
+        let mut prompt = DummyPrompt::new(reader);
+
+        let result = prompt.confirm_action("Do you want to continue?")?;
+
+        assert!(result);
+        Ok(())
+    }
 }

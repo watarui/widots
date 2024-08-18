@@ -2,6 +2,7 @@ use crate::domain::os::OSOperations;
 use crate::error::AppError;
 use async_trait::async_trait;
 
+#[derive(Debug)]
 pub struct OSDetector;
 
 impl Default for OSDetector {
@@ -30,12 +31,26 @@ impl OSOperations for OSDetector {
     }
 }
 
-#[tokio::test]
-async fn test_get_os() {
-    let os_detector = OSDetector::new();
-    let result = os_detector.get_os().await;
-    assert!(result.is_ok());
+#[cfg(test)]
+mod test {
+    use super::*;
 
-    let os = result.unwrap();
-    assert!(os == "macos" || os == "linux", "Unexpected OS: {}", os);
+    #[test]
+    fn test_toml_os_detector_default() {
+        let default_parser = OSDetector;
+        let new_parser = OSDetector::new();
+
+        // Ensure that the default implementation works correctly
+        assert_eq!(format!("{:?}", default_parser), format!("{:?}", new_parser));
+    }
+
+    #[tokio::test]
+    async fn test_get_os() {
+        let os_detector = OSDetector::new();
+        let result = os_detector.get_os().await;
+        assert!(result.is_ok());
+
+        let os = result.unwrap();
+        assert!(os == "macos" || os == "linux", "Unexpected OS: {}", os);
+    }
 }

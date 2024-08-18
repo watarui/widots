@@ -196,3 +196,52 @@ impl ServiceProvider for TestServiceProvider {
         self.vscode_service.clone()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::runtime::Runtime;
+
+    #[test]
+    fn test_production_service_provider_creation() {
+        let rt = Runtime::new().unwrap();
+        let result = rt.block_on(async { ProductionServiceProvider::new().await });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_production_service_provider_services() {
+        let rt = Runtime::new().unwrap();
+        let provider = rt.block_on(async { ProductionServiceProvider::new().await.unwrap() });
+
+        // Ensure that the services are not null
+        assert!(Arc::strong_count(&provider.link_service()) > 0);
+        assert!(Arc::strong_count(&provider.load_service()) > 0);
+        assert!(Arc::strong_count(&provider.deploy_service()) > 0);
+        assert!(Arc::strong_count(&provider.brew_service()) > 0);
+        assert!(Arc::strong_count(&provider.fish_service()) > 0);
+        assert!(Arc::strong_count(&provider.vscode_service()) > 0);
+    }
+
+    #[test]
+    fn test_test_service_provider_creation() {
+        let provider = TestServiceProvider::new(false);
+        assert!(Arc::strong_count(&provider.link_service()) > 0);
+        assert!(Arc::strong_count(&provider.load_service()) > 0);
+        assert!(Arc::strong_count(&provider.deploy_service()) > 0);
+        assert!(Arc::strong_count(&provider.brew_service()) > 0);
+        assert!(Arc::strong_count(&provider.fish_service()) > 0);
+        assert!(Arc::strong_count(&provider.vscode_service()) > 0);
+    }
+
+    #[test]
+    fn test_test_service_provider_with_force() {
+        let provider = TestServiceProvider::new(true);
+        assert!(Arc::strong_count(&provider.link_service()) > 0);
+        assert!(Arc::strong_count(&provider.load_service()) > 0);
+        assert!(Arc::strong_count(&provider.deploy_service()) > 0);
+        assert!(Arc::strong_count(&provider.brew_service()) > 0);
+        assert!(Arc::strong_count(&provider.fish_service()) > 0);
+        assert!(Arc::strong_count(&provider.vscode_service()) > 0);
+    }
+}

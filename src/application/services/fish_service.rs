@@ -2,10 +2,6 @@ use crate::domain::os::OSOperations;
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
 use async_trait::async_trait;
-#[cfg(test)]
-use mockall::mock;
-#[cfg(test)]
-use mockall::predicate::eq;
 use std::sync::Arc;
 
 #[async_trait]
@@ -71,71 +67,128 @@ impl FishService for FishServiceImpl {
 }
 
 #[cfg(test)]
-mock! {
-    ShellExecutor {}
-    #[async_trait]
-    impl ShellExecutor for ShellExecutor {
-        async fn execute(&self, command: &str) -> Result<String, AppError>;
-        async fn output(&self, command: &str) -> Result<std::process::Output, AppError>;
-        fn stderr(&self, output: &std::process::Output) -> String;
+mod tests {
+    use super::*;
+    use crate::domain::os::OSOperations;
+    use crate::domain::shell::ShellExecutor;
+    use crate::error::AppError;
+    use async_trait::async_trait;
+    use mockall::mock;
+    use mockall::predicate::eq;
+    use std::sync::Arc;
+
+    mock! {
+        ShellExecutor {}
+        #[async_trait]
+        impl ShellExecutor for ShellExecutor {
+            async fn execute(&self, command: &str) -> Result<String, AppError>;
+            async fn output(&self, command: &str) -> Result<std::process::Output, AppError>;
+            fn stderr(&self, output: &std::process::Output) -> String;
+        }
     }
-}
 
-#[cfg(test)]
-mock! {
-    OSOperations {}
-    #[async_trait]
-    impl OSOperations for OSOperations {
-        async fn get_os(&self) -> Result<String, AppError>;
+    mock! {
+        OSOperations {}
+        #[async_trait]
+        impl OSOperations for OSOperations {
+            async fn get_os(&self) -> Result<String, AppError>;
+        }
     }
-}
 
-#[tokio::test]
-async fn test_fish_install() {
-    let mut mock_shell = MockShellExecutor::new();
-    let mut mock_os = MockOSOperations::new();
+    #[tokio::test]
+    async fn test_fish_install() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mut mock_os = MockOSOperations::new();
 
-    mock_os
-        .expect_get_os()
-        .returning(|| Ok("macos".to_string()));
+        mock_os
+            .expect_get_os()
+            .returning(|| Ok("macos".to_string()));
 
-    mock_shell
-        .expect_execute()
-        .with(eq("brew install fish"))
-        .returning(|_| Ok("Fish installed successfully".to_string()));
+        mock_shell
+            .expect_execute()
+            .with(eq("brew install fish"))
+            .returning(|_| Ok("Fish installed successfully".to_string()));
 
-    let fish_service = FishServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_os));
+        let fish_service = FishServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_os));
 
-    let result = fish_service.install().await;
-    assert!(result.is_ok());
-}
+        let result = fish_service.install().await;
+        assert!(result.is_ok());
+    }
 
-#[tokio::test]
-async fn test_fish_set_default() {
-    let mut mock_shell = MockShellExecutor::new();
-    let mock_os = MockOSOperations::new();
+    #[tokio::test]
+    async fn test_fish_set_default() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mock_os = MockOSOperations::new();
 
-    mock_shell
-        .expect_execute()
-        .returning(|_| Ok("Command executed successfully".to_string()));
+        mock_shell
+            .expect_execute()
+            .returning(|_| Ok("Command executed successfully".to_string()));
 
-    let fish_service = FishServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_os));
+        let fish_service = FishServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_os));
 
-    let result = fish_service.set_default().await;
-    assert!(result.is_ok());
-}
+        let result = fish_service.set_default().await;
+        assert!(result.is_ok());
+    }
 
-#[tokio::test]
-async fn test_fish_install_fisher() {
-    let mut mock_shell = MockShellExecutor::new();
-    let mock_os = MockOSOperations::new();
+    #[tokio::test]
+    async fn test_fish_install_fisher() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mock_os = MockOSOperations::new();
 
-    mock_shell
-        .expect_execute()
-        .returning(|_| Ok("Fisher installed successfully".to_string()));
+        mock_shell
+            .expect_execute()
+            .returning(|_| Ok("Fisher installed successfully".to_string()));
 
-    let fish_service = FishServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_os));
+        let fish_service = FishServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_os));
 
-    let result = fish_service.install_fisher().await;
-    assert!(result.is_ok());
+        let result = fish_service.install_fisher().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_fish_install_unsupported_os() {
+        let mock_shell = MockShellExecutor::new();
+        let mut mock_os = MockOSOperations::new();
+
+        mock_os
+            .expect_get_os()
+            .returning(|| Ok("windows".to_string()));
+
+        let fish_service = FishServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_os));
+
+        let result = fish_service.install().await;
+        assert!(matches!(result, Err(AppError::UnsupportedOS(_))));
+    }
+
+    #[tokio::test]
+    async fn test_fish_set_default_failure() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mock_os = MockOSOperations::new();
+
+        mock_shell
+            .expect_execute()
+            .returning(|_| Err(AppError::ShellExecution("Command failed".to_string())));
+
+        let fish_service = FishServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_os));
+
+        let result = fish_service.set_default().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_fish_install_fisher_failure() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mock_os = MockOSOperations::new();
+
+        mock_shell.expect_execute().returning(|_| {
+            Err(AppError::ShellExecution(
+                "Fisher installation failed".to_string(),
+            ))
+        });
+
+        let fish_service = FishServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_os));
+
+        let result = fish_service.install_fisher().await;
+        assert!(result.is_err());
+    }
 }

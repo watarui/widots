@@ -20,9 +20,13 @@ pub struct Provision {
     pub script: String,
 }
 
-#[test]
-fn test_config_deserialization() {
-    let toml_str = r#"
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_config_deserialization() {
+        let toml_str = r#"
         [[link]]
         location = "/path/to/dotfiles"
 
@@ -35,17 +39,18 @@ fn test_config_deserialization() {
         script = "echo 'Hello, Linux!'"
     "#;
 
-    let config: Config = toml::from_str(toml_str).unwrap();
+        let config: Config = toml::from_str(toml_str).unwrap();
 
-    assert_eq!(config.link.clone().unwrap().len(), 1);
-    assert_eq!(config.provision.clone().unwrap().len(), 2);
+        assert_eq!(config.link.clone().unwrap().len(), 1);
+        assert_eq!(config.provision.clone().unwrap().len(), 2);
 
-    let link = &config.link.unwrap()[0];
-    assert_eq!(link.location, PathBuf::from("/path/to/dotfiles"));
+        let link = &config.link.unwrap()[0];
+        assert_eq!(link.location, PathBuf::from("/path/to/dotfiles"));
 
-    let provisions = &config.provision.unwrap();
-    assert_eq!(provisions[0].mode, "macos");
-    assert_eq!(provisions[0].script, "echo 'Hello, macOS!'");
-    assert_eq!(provisions[1].mode, "linux");
-    assert_eq!(provisions[1].script, "echo 'Hello, Linux!'");
+        let provisions = &config.provision.unwrap();
+        assert_eq!(provisions[0].mode, "macos");
+        assert_eq!(provisions[0].script, "echo 'Hello, macOS!'");
+        assert_eq!(provisions[1].mode, "linux");
+        assert_eq!(provisions[1].script, "echo 'Hello, Linux!'");
+    }
 }

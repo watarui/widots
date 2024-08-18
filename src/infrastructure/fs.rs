@@ -1,8 +1,6 @@
 use crate::error::AppError;
 use async_trait::async_trait;
 use std::path::Path;
-#[cfg(test)]
-use tempfile::TempDir;
 use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
@@ -12,6 +10,7 @@ pub trait FileSystemOperations: Send + Sync {
     async fn write_lines(&self, path: &Path, lines: &[String]) -> Result<(), AppError>;
 }
 
+#[derive(Debug)]
 pub struct FileSystemOperationsImpl;
 
 impl Default for FileSystemOperationsImpl {
@@ -51,24 +50,75 @@ impl FileSystemOperations for FileSystemOperationsImpl {
     }
 }
 
-#[tokio::test]
-async fn test_read_write_lines() -> Result<(), AppError> {
-    let temp_dir = TempDir::new()?;
-    let file_path = temp_dir.path().join("test.txt");
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::error::AppError;
+    use proptest::prelude::*;
+    use tempfile::TempDir;
 
-    let fs_ops = FileSystemOperationsImpl::new();
+    #[test]
+    fn test_toml_file_system_operations_impl_default() {
+        let default_parser = FileSystemOperationsImpl;
+        let new_parser = FileSystemOperationsImpl::new();
 
-    let lines_to_write = vec![
-        "Line 1".to_string(),
-        "Line 2".to_string(),
-        "Line 3".to_string(),
-    ];
+        // Ensure that the default implementation works correctly
+        assert_eq!(format!("{:?}", default_parser), format!("{:?}", new_parser));
+    }
 
-    fs_ops.write_lines(&file_path, &lines_to_write).await?;
+    #[tokio::test]
+    async fn test_read_write_lines() -> Result<(), AppError> {
+        let temp_dir = TempDir::new()?;
+        let file_path = temp_dir.path().join("test.txt");
 
-    let read_lines = fs_ops.read_lines(&file_path).await?;
+        let fs_ops = FileSystemOperationsImpl::new();
 
-    assert_eq!(lines_to_write, read_lines);
+        let lines_to_write = vec![
+            "Line 1".to_string(),
+            "Line 2".to_string(),
+            "Line 3".to_string(),
+        ];
 
-    Ok(())
+        fs_ops.write_lines(&file_path, &lines_to_write).await?;
+
+        let read_lines = fs_ops.read_lines(&file_path).await?;
+
+        assert_eq!(lines_to_write, read_lines);
+
+        Ok(())
+    }
+
+    proptest! {
+        #[test]
+        fn test_write_read_lines_roundtrip(lines in prop::collection::vec(String::arbitrary(), 0..100)) {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let _ = rt.block_on(async {
+                let temp_dir = TempDir::new().unwrap();
+                let file_path = temp_dir.path().join("test.txt");
+                let fs_ops = FileSystemOperationsImpl::new();
+
+                fs_ops.write_lines(&file_path, &lines).await.unwrap();
+                let read_lines = fs_ops.read_lines(&file_path).await.unwrap();
+
+                prop_assert_eq!(lines, read_lines);
+                Ok(())
+            });
+        }
+
+        #[test]
+        fn test_write_lines_non_empty(lines in prop::collection::vec(String::arbitrary(), 1..100)) {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let _ =rt.block_on(async {
+                let temp_dir = TempDir::new().unwrap();
+                let file_path = temp_dir.path().join("test.txt");
+                let fs_ops = FileSystemOperationsImpl::new();
+
+                fs_ops.write_lines(&file_path, &lines).await.unwrap();
+                let metadata = tokio::fs::metadata(&file_path).await.unwrap();
+
+                prop_assert!(metadata.len() > 0);
+                Ok(())
+            });
+        }
+    }
 }

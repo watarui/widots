@@ -7,6 +7,7 @@ use regex::Regex;
 use std::path::{Component, Path};
 use tokio::fs;
 
+#[derive(Debug)]
 pub struct LinkerImpl;
 
 impl Default for LinkerImpl {
@@ -172,6 +173,15 @@ mod tests {
     use std::collections::HashSet;
     use std::path::PathBuf;
     use tempfile::TempDir;
+
+    #[test]
+    fn test_toml_linker_impl_default() {
+        let default_parser = LinkerImpl;
+        let new_parser = LinkerImpl::new();
+
+        // Ensure that the default implementation works correctly
+        assert_eq!(format!("{:?}", default_parser), format!("{:?}", new_parser));
+    }
 
     #[test]
     fn test_should_ignore() {

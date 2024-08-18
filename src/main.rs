@@ -31,3 +31,22 @@ async fn main() -> Result<(), AppError> {
 
     presentation::cli::run(args, &services).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    const APP: &str = "widots";
+    #[test]
+    fn test_args_parsing() {
+        let args = Args::parse_from([APP, "-v", "link", "/src"]);
+        assert_eq!(args.verbose, 1);
+
+        let args = Args::parse_from([APP, "-vv", "link", "/src"]);
+        assert_eq!(args.verbose, 2);
+
+        let args = Args::parse_from([APP, "link", "/src"]);
+        assert_eq!(args.verbose, 0);
+    }
+}
