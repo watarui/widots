@@ -4,3 +4,4 @@ pre-release-commit-message = "Release version {{version}}"
 tag-message = "Release {{version}}"
 tag-name = "v{{version}}"
 publish = false
+allow-branch = ["main"]
