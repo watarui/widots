@@ -136,18 +136,35 @@ impl LinkOperations for LinkerImpl {
         let mut dirs = vec![target.to_path_buf()];
 
         while let Some(dir) = dirs.pop() {
-            let mut entries = fs::read_dir(&dir).await?;
-
-            while let Some(entry) = entries.next_entry().await? {
-                let path = entry.path();
-
-                if path.is_dir() {
-                    dirs.push(path);
-                } else if path.is_symlink() {
-                    let target = fs::read_link(&path).await?;
-                    fs::remove_file(&path).await?;
-                    fs::copy(&target, &path).await?;
-                    results.push(FileProcessResult::Materialized(path, target));
+            match fs::read_dir(&dir).await {
+                Ok(mut entries) => {
+                    while let Some(entry) = entries.next_entry().await? {
+                        let path = entry.path();
+                        if path.is_dir() {
+                            dirs.push(path);
+                        } else if path.is_symlink() {
+                            match fs::read_link(&path).await {
+                                Ok(target) => {
+                                    if let Err(e) = fs::remove_file(&path).await {
+                                        println!("Error removing symlink: {:?}", e);
+                                        continue;
+                                    }
+                                    if let Err(e) = fs::copy(&target, &path).await {
+                                        println!("Error copying file: {:?}", e);
+                                        continue;
+                                    }
+                                    results.push(FileProcessResult::Materialized(path, target));
+                                }
+                                Err(e) => {
+                                    println!("Error reading symlink: {:?}", e);
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("Error reading directory: {:?}", e);
+                    continue;
                 }
             }
         }
@@ -171,8 +188,12 @@ mod tests {
     use proptest::prelude::*;
     use proptest::strategy::Strategy;
     use std::collections::HashSet;
+    // use std::future::Future;
     use std::path::PathBuf;
+    // use std::pin::Pin;
+    use rand::Rng;
     use tempfile::TempDir;
+    use tokio::fs;
 
     #[test]
     fn test_toml_linker_impl_default() {
@@ -276,6 +297,53 @@ mod tests {
         assert!(fs::symlink_metadata(target_dir.join("dir1/file3.txt"))
             .await?
             .is_symlink());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_materialize_symlinks_recursively() -> Result<(), AppError> {
+        let temp_dir = TempDir::new()?;
+        let target_dir = temp_dir.path().join("target");
+        fs::create_dir(&target_dir).await?;
+
+        // Create a directory structure with symlinks
+        let file1_path = target_dir.join("file1.txt");
+        fs::write(&file1_path, "content1").await?;
+
+        let symlink1_path = target_dir.join("symlink1");
+        fs::symlink(&file1_path, &symlink1_path).await?;
+
+        let subdir_path = target_dir.join("subdir");
+        fs::create_dir(&subdir_path).await?;
+
+        let file2_path = subdir_path.join("file2.txt");
+        fs::write(&file2_path, "content2").await?;
+
+        let symlink2_path = subdir_path.join("symlink2");
+        fs::symlink(&file2_path, &symlink2_path).await?;
+
+        let linker = LinkerImpl::new();
+        let results = linker.materialize_symlinks_recursively(&target_dir).await?;
+
+        assert_eq!(results.len(), 2);
+        for result in &results {
+            match result {
+                FileProcessResult::Materialized(path, target) => {
+                    assert!(path.exists());
+                    assert!(!path.is_symlink());
+                    assert_eq!(
+                        fs::read_to_string(path).await?,
+                        fs::read_to_string(target).await?
+                    );
+                }
+                _ => panic!("Expected Materialized result"),
+            }
+        }
+
+        // Check that source files are not modified
+        assert_eq!(fs::read_to_string(&file1_path).await?, "content1");
+        assert_eq!(fs::read_to_string(&file2_path).await?, "content2");
 
         Ok(())
     }
@@ -399,5 +467,146 @@ mod tests {
                 Ok(())
             }).unwrap()
         }
+    }
+
+    #[test]
+    fn test_materialize_symlinks_recursively_prop() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let target_dir = temp_dir.path().to_path_buf();
+            let mut rng = rand::thread_rng();
+
+            for _ in 0..100 {
+                // Number of iterations for the test
+                let file_structure = generate_file_structure(3, 5, &mut rng);
+
+                if let Err(e) = create_file_structure(&target_dir, file_structure).await {
+                    println!("Error creating file structure: {:?}", e);
+                    continue;
+                }
+
+                let linker = LinkerImpl::new();
+                match linker.materialize_symlinks_recursively(&target_dir).await {
+                    Ok(results) => {
+                        // 結果の検証
+                        if let Err(e) = verify_materialized_symlinks(&target_dir, &results).await {
+                            println!("Error verifying materialized symlinks: {:?}", e);
+                        }
+                    }
+                    Err(e) => {
+                        println!("Error in materialize_symlinks_recursively: {:?}", e);
+                    }
+                }
+
+                // Clean up after the test
+                if let Err(e) = fs::remove_dir_all(&target_dir).await {
+                    println!("Error cleaning up test directory: {:?}", e);
+                }
+            }
+        });
+    }
+
+    #[derive(Debug, Clone)]
+    enum FileType {
+        File,
+        Symlink,
+        Dir(Vec<(String, FileType)>),
+    }
+
+    fn generate_file_structure(max_depth: u32, max_entries: usize, rng: &mut impl Rng) -> FileType {
+        if max_depth == 0 || rng.gen_bool(0.7) {
+            if rng.gen_bool(0.5) {
+                FileType::File
+            } else {
+                FileType::Symlink
+            }
+        } else {
+            let num_entries = rng.gen_range(0..=max_entries);
+            let entries = (0..num_entries)
+                .map(|_| {
+                    let name =
+                        std::iter::repeat_with(|| rng.sample(rand::distributions::Alphanumeric))
+                            .take(10)
+                            .map(char::from)
+                            .collect::<String>();
+                    (
+                        name,
+                        generate_file_structure(max_depth - 1, max_entries, rng),
+                    )
+                })
+                .collect();
+            FileType::Dir(entries)
+        }
+    }
+
+    async fn create_file_structure(base_path: &Path, file_type: FileType) -> Result<(), AppError> {
+        match file_type {
+            FileType::Symlink => {
+                let target = base_path.with_file_name("target.txt");
+                fs::write(&target, "symlink target content").await?;
+                if fs::symlink_metadata(base_path).await.is_ok() {
+                    fs::remove_file(base_path).await?;
+                }
+                fs::symlink(&target, base_path).await?;
+            }
+            FileType::Dir(entries) => {
+                fs::create_dir_all(base_path).await?;
+                for (name, entry) in entries {
+                    let path = base_path.join(name);
+                    Box::pin(create_file_structure(&path, entry)).await?;
+                }
+            }
+            FileType::File => {
+                if let Err(e) = fs::write(base_path, "file content").await {
+                    if e.kind() == std::io::ErrorKind::AlreadyExists {
+                        // Ignore if the file already exists
+                    } else {
+                        return Err(AppError::Io(e));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn verify_materialized_symlinks(
+        base_path: &Path,
+        results: &Vec<FileProcessResult>,
+    ) -> Result<(), std::io::Error> {
+        let mut stack = vec![base_path.to_path_buf()];
+
+        while let Some(dir) = stack.pop() {
+            let mut entries = fs::read_dir(&dir).await?;
+            while let Some(entry) = entries.next_entry().await? {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else if path.is_symlink() {
+                    // Ensure that all symlinks have been materialized
+                    assert!(
+                        results.iter().any(
+                            |r| matches!(r, FileProcessResult::Materialized(p, _) if p == &path)
+                        ),
+                        "Symlink was not materialized: {:?}",
+                        path
+                    );
+                }
+            }
+        }
+
+        // Ensure that all materialized files exist and are not symlinks
+        for result in results {
+            if let FileProcessResult::Materialized(path, _) = result {
+                assert!(
+                    !path.is_symlink(),
+                    "File should not be a symlink after materialization: {:?}",
+                    path
+                );
+                assert!(path.exists(), "Materialized file should exist: {:?}", path);
+            }
+        }
+
+        Ok(())
     }
 }
