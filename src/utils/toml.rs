@@ -43,7 +43,7 @@ mod test {
 
     #[test]
     fn test_toml_parser_default() {
-        let default_parser = TomlParser {};
+        let default_parser = TomlParser;
         let new_parser = TomlParser::new();
 
         // Ensure that the default implementation works correctly
