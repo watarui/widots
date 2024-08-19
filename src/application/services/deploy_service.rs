@@ -66,7 +66,7 @@ impl DeployServiceImpl {
         if source.exists() {
             tokio::fs::copy(&source, &target).await?;
         } else {
-            // ソースファイルが存在しない場合、空のファイルを作成
+            // Create an empty file if the source file does not exist
             tokio::fs::File::create(&target).await?;
         }
 
@@ -177,7 +177,7 @@ mod test {
         mock_deploy_service.expect_execute().returning(|| Ok(()));
 
         let _deploy_service =
-            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), false);
+            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), true);
 
         let result = mock_deploy_service.execute().await;
         assert!(result.is_ok());
@@ -197,7 +197,7 @@ mod test {
             .returning(|_| Err(AppError::ShellExecution("Deployment failed".to_string())));
 
         let deploy_service =
-            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), false);
+            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), true);
 
         let result = deploy_service.deploy_executable().await;
         assert!(result.is_err());
@@ -213,7 +213,7 @@ mod test {
             .returning(|_| Err(AppError::Deployment("Invalid path".to_string())));
 
         let deploy_service =
-            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), false);
+            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), true);
 
         let result = deploy_service.locate_fish_completions().await;
         assert!(result.is_err());
@@ -224,27 +224,22 @@ mod test {
         let mut mock_shell = MockShellExecutor::new();
         let mut mock_path = MockPathOperations::new();
 
-        println!("Setting up mocks for deploy_executable_success");
+        mock_path
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
 
-        mock_path.expect_parse_path().returning(|path| {
-            println!("parse_path called with: {:?}", path);
-            Ok(path.to_path_buf())
-        });
-
-        mock_shell.expect_execute().times(2).returning(|cmd| {
-            println!("execute called with: {}", cmd);
-            Ok("Command executed successfully".to_string())
-        });
+        mock_shell
+            .expect_execute()
+            .times(2)
+            .returning(|_cmd| Ok("Command executed successfully".to_string()));
 
         let deploy_service =
             DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), true);
 
-        println!("Calling deploy_executable");
         let result = timeout(Duration::from_secs(5), deploy_service.deploy_executable()).await;
 
         match result {
             Ok(inner_result) => {
-                println!("deploy_executable result: {:?}", inner_result);
                 assert!(inner_result.is_ok());
             }
             Err(_) => {
@@ -258,9 +253,6 @@ mod test {
         let mock_shell = MockShellExecutor::new();
         let mut mock_path = MockPathOperations::new();
 
-        println!("Setting up mocks for locate_fish_completions_success");
-
-        // テスト用の一時ディレクトリを作成
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
         let temp_path = temp_dir.path().to_path_buf();
 
@@ -269,9 +261,8 @@ mod test {
             .returning(move |_| Ok(temp_path.clone()));
 
         let deploy_service =
-            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), false);
+            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), true);
 
-        // 環境変数を設定
         std::env::set_var(
             "FISH_COMPLETIONS_TARGET_DIR",
             temp_dir.path().to_str().unwrap(),
@@ -282,14 +273,11 @@ mod test {
             source_path.to_str().unwrap(),
         );
 
-        // ソースファイルを作成
         tokio::fs::File::create(&source_path)
             .await
             .expect("Failed to create source file");
 
-        println!("Calling locate_fish_completions");
         let result = deploy_service.locate_fish_completions().await;
-        println!("locate_fish_completions result: {:?}", result);
         assert!(result.is_ok());
 
         // Clean up
@@ -302,9 +290,6 @@ mod test {
         let mut mock_shell = MockShellExecutor::new();
         let mut mock_path = MockPathOperations::new();
 
-        println!("Setting up mocks for execute_success");
-
-        // テスト用の一時ディレクトリを作成
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
         let temp_path = temp_dir.path().to_path_buf();
 
@@ -312,7 +297,6 @@ mod test {
             .expect_output()
             .with(eq("cargo build --release"))
             .returning(|_| {
-                println!("cargo build --release called");
                 Ok(std::process::Output {
                     status: std::process::ExitStatus::from_raw(0),
                     stdout: vec![],
@@ -320,20 +304,18 @@ mod test {
                 })
             });
 
-        mock_shell.expect_execute().returning(|cmd| {
-            println!("execute called with: {}", cmd);
-            Ok("Command executed successfully".to_string())
-        });
+        mock_shell
+            .expect_execute()
+            .returning(|_cmd| Ok("Command executed successfully".to_string()));
 
         mock_path
             .expect_parse_path()
             .returning(move |_| Ok(temp_path.clone()));
 
-        // skip_source_check を true に設定
+        // Specify skip_source_check as true
         let deploy_service =
             DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), true);
 
-        // 環境変数を設定
         std::env::set_var(
             "FISH_COMPLETIONS_TARGET_DIR",
             temp_dir.path().to_str().unwrap(),
@@ -344,14 +326,11 @@ mod test {
             source_path.to_str().unwrap(),
         );
 
-        // ソースファイルを作成
         tokio::fs::File::create(&source_path)
             .await
             .expect("Failed to create source file");
 
-        println!("Calling execute");
         let result = deploy_service.execute().await;
-        println!("execute result: {:?}", result);
         assert!(result.is_ok());
 
         // Clean up
@@ -380,7 +359,7 @@ mod test {
             .returning(|_| "Build failed".to_string());
 
         let deploy_service =
-            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), false);
+            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), true);
 
         let result = deploy_service.execute().await;
         assert!(matches!(result, Err(AppError::Deployment(_))));

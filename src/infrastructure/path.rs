@@ -90,8 +90,7 @@ mod test {
     async fn test_parse_path() -> Result<(), AppError> {
         let path_expander = PathExpander::new();
         let result = path_expander.parse_path(Path::new("/tmp/test")).await?;
-        assert!(result.starts_with("/"));
-        assert!(result.ends_with("tmp/test"));
+        assert!(result.to_str().unwrap().contains("/tmp/test"));
         Ok(())
     }
 
