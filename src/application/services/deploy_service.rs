@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use tokio::fs;
 
 use crate::constants::{
     DEPLOY_DESTINATION_PATH, DEPLOY_SOURCE_PATH, FISH_COMPLETIONS_FILENAME,
@@ -19,16 +18,19 @@ pub trait DeployService: Send + Sync {
 pub struct DeployServiceImpl {
     shell_executor: Arc<dyn ShellExecutor>,
     path_operations: Arc<dyn PathOperations>,
+    skip_source_check: bool,
 }
 
 impl DeployServiceImpl {
     pub fn new(
         shell_executor: Arc<dyn ShellExecutor>,
         path_operations: Arc<dyn PathOperations>,
+        skip_source_check: bool,
     ) -> Self {
         Self {
             shell_executor,
             path_operations,
+            skip_source_check,
         }
     }
 
@@ -39,9 +41,7 @@ impl DeployServiceImpl {
             .parse_path(Path::new(DEPLOY_DESTINATION_PATH))
             .await?;
 
-        // テスト時にファイルの存在チェックをスキップ
-        #[cfg(not(test))]
-        if !source.exists() {
+        if !self.skip_source_check && !source.exists() {
             return Err(AppError::FileNotFound(source.to_path_buf()));
         }
 
@@ -176,7 +176,8 @@ mod test {
 
         mock_deploy_service.expect_execute().returning(|| Ok(()));
 
-        let _deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
+        let _deploy_service =
+            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), false);
 
         let result = mock_deploy_service.execute().await;
         assert!(result.is_ok());
@@ -195,7 +196,8 @@ mod test {
             .expect_execute()
             .returning(|_| Err(AppError::ShellExecution("Deployment failed".to_string())));
 
-        let deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
+        let deploy_service =
+            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), false);
 
         let result = deploy_service.deploy_executable().await;
         assert!(result.is_err());
@@ -210,7 +212,8 @@ mod test {
             .expect_parse_path()
             .returning(|_| Err(AppError::Deployment("Invalid path".to_string())));
 
-        let deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
+        let deploy_service =
+            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), false);
 
         let result = deploy_service.locate_fish_completions().await;
         assert!(result.is_err());
@@ -233,7 +236,8 @@ mod test {
             Ok("Command executed successfully".to_string())
         });
 
-        let deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
+        let deploy_service =
+            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), true);
 
         println!("Calling deploy_executable");
         let result = timeout(Duration::from_secs(5), deploy_service.deploy_executable()).await;
@@ -264,7 +268,8 @@ mod test {
             .expect_parse_path()
             .returning(move |_| Ok(temp_path.clone()));
 
-        let deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
+        let deploy_service =
+            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), false);
 
         // 環境変数を設定
         std::env::set_var(
@@ -324,7 +329,9 @@ mod test {
             .expect_parse_path()
             .returning(move |_| Ok(temp_path.clone()));
 
-        let deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
+        // skip_source_check を true に設定
+        let deploy_service =
+            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), true);
 
         // 環境変数を設定
         std::env::set_var(
@@ -372,7 +379,8 @@ mod test {
             .expect_stderr()
             .returning(|_| "Build failed".to_string());
 
-        let deploy_service = DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path));
+        let deploy_service =
+            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), false);
 
         let result = deploy_service.execute().await;
         assert!(matches!(result, Err(AppError::Deployment(_))));
