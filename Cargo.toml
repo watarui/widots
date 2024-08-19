@@ -30,7 +30,6 @@ dirs = "5.0.1"
 fern = { version = "0.6.2", features = ["chrono", "colored"] }
 futures = "0.3.30"
 inquire = "0.7.5"
-lazy_static = "1.5.0"
 log = "0.4.22"
 rand = "0.8.5"
 regex = "1.10.6"

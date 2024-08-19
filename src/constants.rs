@@ -1,25 +1,25 @@
-use lazy_static::lazy_static;
 use std::collections::HashSet;
+use std::sync::LazyLock;
 
-lazy_static! {
-    pub static ref LINK_IGNORED_FILES: HashSet<&'static str> = {
-        let mut s = HashSet::new();
-        s.insert(".DS_Store");
-        s.insert(".gitignore");
-        s
-    };
-    pub static ref LINK_IGNORED_PREFIXES: HashSet<&'static str> = {
-        let mut s = HashSet::new();
-        s.insert("_");
-        s
-    };
-    pub static ref LINK_IGNORED_ANCESTORS: HashSet<&'static str> = {
-        let mut s = HashSet::new();
-        s.insert(".git");
-        s.insert("node_modules");
-        s
-    };
-}
+pub static LINK_IGNORED_FILES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut s = HashSet::new();
+    s.insert(".DS_Store");
+    s.insert(".gitignore");
+    s
+});
+
+pub static LINK_IGNORED_PREFIXES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut s = HashSet::new();
+    s.insert("_");
+    s
+});
+
+pub static LINK_IGNORED_ANCESTORS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut s = HashSet::new();
+    s.insert(".git");
+    s.insert("node_modules");
+    s
+});
 
 pub const DEFAULT_CONFIG_TOML: &str = "~/.config/widots/config.toml";
 
