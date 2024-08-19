@@ -29,4 +29,10 @@ pub enum AppError {
 
     #[error("Deployment error: {0}")]
     Deployment(String),
+
+    #[error("Max retries exceeded")]
+    MaxRetriesExceeded,
+
+    #[error("Operation timeout")]
+    Timeout,
 }
