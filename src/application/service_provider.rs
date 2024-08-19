@@ -71,6 +71,7 @@ impl ProductionServiceProvider {
             deploy_service: Arc::new(DeployServiceImpl::new(
                 shell_executor.clone(),
                 path_operations.clone(),
+                false,
             )),
             brew_service: Arc::new(BrewServiceImpl::new(
                 shell_executor.clone(),
@@ -153,6 +154,7 @@ impl TestServiceProvider {
             deploy_service: Arc::new(DeployServiceImpl::new(
                 shell_executor.clone(),
                 path_operations.clone(),
+                true,
             )),
             brew_service: Arc::new(BrewServiceImpl::new(
                 shell_executor.clone(),
