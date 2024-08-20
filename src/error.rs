@@ -35,4 +35,7 @@ pub enum AppError {
 
     #[error("Operation timeout")]
     Timeout,
+
+    #[error("Code command not installed")]
+    CodeCommandNotInstalled,
 }

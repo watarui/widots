@@ -72,8 +72,6 @@ jobs:
     container:
       image: xd009642/tarpaulin:develop
       options: --security-opt seccomp=unconfined
-    env:
-      CARGO_TERM_COLOR: always
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

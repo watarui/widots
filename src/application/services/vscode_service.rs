@@ -1,4 +1,5 @@
 use crate::constants::{RESOURCES_DIR, VSCODE_EXTENSIONS_FILENAME};
+use crate::domain::os::OSOperations;
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
 use crate::infrastructure::fs::FileSystemOperations;
@@ -16,16 +17,19 @@ pub trait VSCodeService: Send + Sync {
 pub struct VSCodeServiceImpl {
     shell_executor: Arc<dyn ShellExecutor>,
     fs_operations: Arc<dyn FileSystemOperations>,
+    os_detector: Arc<dyn OSOperations>,
 }
 
 impl VSCodeServiceImpl {
     pub fn new(
         shell_executor: Arc<dyn ShellExecutor>,
         fs_operations: Arc<dyn FileSystemOperations>,
+        os_detector: Arc<dyn OSOperations>,
     ) -> Self {
         Self {
             shell_executor,
             fs_operations,
+            os_detector,
         }
     }
 }
@@ -64,12 +68,20 @@ impl VSCodeService for VSCodeServiceImpl {
     async fn ensure_code_command(&self) -> Result<(), AppError> {
         match self.shell_executor.execute("which code").await {
             Ok(_) => Ok(()),
-            Err(_) => {
-                self.shell_executor.execute(
+            Err(_) => match self.os_detector.get_os().await?.as_str() {
+                "macos" => {
+                    if Path::new("/Applications/Visual Studio Code.app").exists() {
+                        self.shell_executor.execute(
                     r#"ln -s "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" /usr/local/bin/code"#
-                ).await?;
-                Ok(())
-            }
+                        ).await?;
+                        println!("Code command installed successfully");
+                        Ok(())
+                    } else {
+                        Err(AppError::CodeCommandNotInstalled)
+                    }
+                }
+                _ => Err(AppError::CodeCommandNotInstalled),
+            },
         }
     }
 }
@@ -105,10 +117,19 @@ mod test {
         }
     }
 
+    mock! {
+        OSOperations {}
+        #[async_trait]
+        impl OSOperations for OSOperations {
+            async fn get_os(&self) -> Result<String, AppError>;
+        }
+    }
+
     #[tokio::test]
     async fn test_export_extensions() {
         let mut mock_shell = MockShellExecutor::new();
         let mut mock_fs = MockFileSystemOperations::new();
+        let mock_os = MockOSOperations::new();
 
         mock_shell
             .expect_execute()
@@ -117,7 +138,8 @@ mod test {
 
         mock_fs.expect_write_lines().returning(|_, _| Ok(()));
 
-        let vscode_service = VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
+        let vscode_service =
+            VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs), Arc::new(mock_os));
 
         let result = vscode_service.export_extensions().await;
         assert!(result.is_ok());
@@ -127,6 +149,7 @@ mod test {
     async fn test_import_extensions() {
         let mut mock_shell = MockShellExecutor::new();
         let mut mock_fs = MockFileSystemOperations::new();
+        let mock_os = MockOSOperations::new();
 
         mock_fs
             .expect_read_lines()
@@ -136,7 +159,8 @@ mod test {
             .expect_execute()
             .returning(|_| Ok("Extension installed successfully".to_string()));
 
-        let vscode_service = VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
+        let vscode_service =
+            VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs), Arc::new(mock_os));
 
         let result = vscode_service.import_extensions().await;
         assert!(result.is_ok());
@@ -146,13 +170,15 @@ mod test {
     async fn test_ensure_code_command() {
         let mut mock_shell = MockShellExecutor::new();
         let mock_fs = MockFileSystemOperations::new();
+        let mock_os = MockOSOperations::new();
 
         mock_shell
             .expect_execute()
             .with(eq("which code"))
             .returning(|_| Ok("/usr/local/bin/code".to_string()));
 
-        let vscode_service = VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
+        let vscode_service =
+            VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs), Arc::new(mock_os));
 
         let result = vscode_service.ensure_code_command().await;
         assert!(result.is_ok());
@@ -162,6 +188,7 @@ mod test {
     async fn test_export_extensions_empty_list() {
         let mut mock_shell = MockShellExecutor::new();
         let mut mock_fs = MockFileSystemOperations::new();
+        let mock_os = MockOSOperations::new();
 
         mock_shell
             .expect_execute()
@@ -173,7 +200,8 @@ mod test {
             Ok(())
         });
 
-        let vscode_service = VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
+        let vscode_service =
+            VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs), Arc::new(mock_os));
 
         let result = vscode_service.export_extensions().await;
         assert!(result.is_ok());
@@ -183,13 +211,15 @@ mod test {
     async fn test_export_extensions_failure() {
         let mut mock_shell = MockShellExecutor::new();
         let mock_fs = MockFileSystemOperations::new();
+        let mock_os = MockOSOperations::new();
 
         mock_shell
             .expect_execute()
             .with(eq("code --list-extensions"))
             .returning(|_| Err(AppError::ShellExecution("Command failed".to_string())));
 
-        let vscode_service = VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
+        let vscode_service =
+            VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs), Arc::new(mock_os));
 
         let result = vscode_service.export_extensions().await;
         assert!(result.is_err());
@@ -200,10 +230,12 @@ mod test {
     async fn test_import_extensions_empty_file() {
         let mock_shell = MockShellExecutor::new();
         let mut mock_fs = MockFileSystemOperations::new();
+        let mock_os = MockOSOperations::new();
 
         mock_fs.expect_read_lines().returning(|_| Ok(vec![]));
 
-        let vscode_service = VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
+        let vscode_service =
+            VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs), Arc::new(mock_os));
 
         let result = vscode_service.import_extensions().await;
         assert!(result.is_ok());
@@ -213,6 +245,7 @@ mod test {
     async fn test_import_extensions_failure() {
         let mut mock_shell = MockShellExecutor::new();
         let mut mock_fs = MockFileSystemOperations::new();
+        let mock_os = MockOSOperations::new();
 
         mock_fs
             .expect_read_lines()
@@ -224,7 +257,8 @@ mod test {
             ))
         });
 
-        let vscode_service = VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
+        let vscode_service =
+            VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs), Arc::new(mock_os));
 
         let result = vscode_service.import_extensions().await;
         assert!(result.is_err());
@@ -232,45 +266,82 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_ensure_code_command_not_found() {
+    async fn test_ensure_code_command_already_exists() {
         let mut mock_shell = MockShellExecutor::new();
         let mock_fs = MockFileSystemOperations::new();
+        let mock_os = MockOSOperations::new();
 
         mock_shell
             .expect_execute()
             .with(eq("which code"))
-            .returning(|_| Err(AppError::ShellExecution("Command not found".to_string())));
+            .returning(|_| Ok("/usr/local/bin/code".to_string()));
 
-        mock_shell
-            .expect_execute()
-            .with(eq(r#"ln -s "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" /usr/local/bin/code"#))
-            .returning(|_| Ok("Symlink created".to_string()));
-
-        let vscode_service = VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
+        let vscode_service =
+            VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs), Arc::new(mock_os));
 
         let result = vscode_service.ensure_code_command().await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
-    async fn test_ensure_code_command_symlink_failure() {
+    async fn test_ensure_code_command_macos() {
         let mut mock_shell = MockShellExecutor::new();
         let mock_fs = MockFileSystemOperations::new();
+        let mut mock_os = MockOSOperations::new();
 
         mock_shell
             .expect_execute()
             .with(eq("which code"))
             .returning(|_| Err(AppError::ShellExecution("Command not found".to_string())));
 
+        mock_os
+            .expect_get_os()
+            .returning(|| Ok("macos".to_string()));
+
+        if Path::new("/Applications/Visual Studio Code.app").exists() {
+            mock_shell
+              .expect_execute()
+              .with(eq(r#"ln -s "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" /usr/local/bin/code"#))
+              .returning(|_| Ok("Symlink created".to_string()));
+        }
+        let vscode_service =
+            VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs), Arc::new(mock_os));
+
+        let result = vscode_service.ensure_code_command().await;
+        if Path::new("/Applications/Visual Studio Code.app").exists() {
+            assert!(result.is_ok());
+        } else {
+            assert!(result.is_err());
+            assert!(matches!(
+                result.unwrap_err(),
+                AppError::CodeCommandNotInstalled
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_ensure_code_command_non_macos() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mock_fs = MockFileSystemOperations::new();
+        let mut mock_os = MockOSOperations::new();
+
         mock_shell
             .expect_execute()
-            .with(eq(r#"ln -s "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" /usr/local/bin/code"#))
-            .returning(|_| Err(AppError::ShellExecution("Failed to create symlink".to_string())));
+            .with(eq("which code"))
+            .returning(|_| Err(AppError::ShellExecution("Command not found".to_string())));
 
-        let vscode_service = VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
+        mock_os
+            .expect_get_os()
+            .returning(|| Ok("linux".to_string()));
+
+        let vscode_service =
+            VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs), Arc::new(mock_os));
 
         let result = vscode_service.ensure_code_command().await;
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), AppError::ShellExecution(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            AppError::CodeCommandNotInstalled
+        ));
     }
 }
