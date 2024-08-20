@@ -21,6 +21,7 @@ pub static LINK_IGNORED_ANCESTORS: LazyLock<HashSet<&'static str>> = LazyLock::n
     s
 });
 
+pub const APP_NAME: &str = "widots";
 pub const DEFAULT_CONFIG_TOML: &str = "~/.config/widots/config.toml";
 
 pub const TEST_HOME_DIR: &str = ".widots-test";

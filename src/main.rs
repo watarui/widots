@@ -37,11 +37,11 @@ async fn main() -> Result<(), AppError> {
 
 #[cfg(test)]
 mod tests {
+    use constants::APP_NAME;
+
     use super::*;
     use crate::application::service_provider::TestServiceProvider;
     use std::io::ErrorKind;
-
-    const APP_NAME: &str = "widots";
 
     #[tokio::test]
     async fn test_run_app() {

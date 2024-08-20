@@ -62,6 +62,7 @@ mod tests {
     use crate::application::services::link_service::LinkService;
     use crate::application::services::load_service::LoadService;
     use crate::application::services::vscode_service::VSCodeService;
+    use crate::constants::APP_NAME;
     use crate::models::link::FileProcessResult;
     use async_trait::async_trait;
     use clap::Parser;
@@ -172,8 +173,6 @@ mod tests {
         }
     }
 
-    const APP: &str = "widots";
-
     #[tokio::test]
     async fn test_run_link_command() {
         let mut mock_service_provider = MockServiceProvider::new();
@@ -182,7 +181,7 @@ mod tests {
             .expect_link_service()
             .returning(|| Arc::new(CustomMockLinkService));
 
-        let args = Args::parse_from([APP, "link", "--test", "/src"]);
+        let args = Args::parse_from([APP_NAME, "link", "--test", "/src"]);
 
         let result = run(args, &mock_service_provider).await;
         assert!(result.is_ok());
@@ -196,7 +195,7 @@ mod tests {
             .expect_link_service()
             .returning(|| Arc::new(CustomMockLinkService));
 
-        let args = Args::parse_from([APP, "materialize", "/dst"]);
+        let args = Args::parse_from([APP_NAME, "materialize", "/dst"]);
 
         let result = run(args, &mock_service_provider).await;
         assert!(result.is_ok());
@@ -210,7 +209,7 @@ mod tests {
             .expect_load_service()
             .returning(|| Arc::new(CustomMockLoadService));
 
-        let args = Args::parse_from([APP, "load", "--test", "/path/to/config"]);
+        let args = Args::parse_from([APP_NAME, "load", "--test", "/path/to/config"]);
 
         let result = run(args, &mock_service_provider).await;
         assert!(result.is_ok());
@@ -224,7 +223,7 @@ mod tests {
             .expect_deploy_service()
             .returning(|| Arc::new(CustomMockDeployService));
 
-        let args = Args::parse_from([APP, "deploy"]);
+        let args = Args::parse_from([APP_NAME, "deploy"]);
 
         let result = run(args, &mock_service_provider).await;
         assert!(result.is_ok());
@@ -238,7 +237,7 @@ mod tests {
             .expect_brew_service()
             .returning(|| Arc::new(CustomMockBrewService));
 
-        let args = Args::parse_from([APP, "brew", "install"]);
+        let args = Args::parse_from([APP_NAME, "brew", "install"]);
 
         let result = run(args, &mock_service_provider).await;
         assert!(result.is_ok());
@@ -252,7 +251,7 @@ mod tests {
             .expect_brew_service()
             .returning(|| Arc::new(CustomMockBrewService));
 
-        let args = Args::parse_from([APP, "brew", "import"]);
+        let args = Args::parse_from([APP_NAME, "brew", "import"]);
 
         let result = run(args, &mock_service_provider).await;
         assert!(result.is_ok());
@@ -266,7 +265,7 @@ mod tests {
             .expect_brew_service()
             .returning(|| Arc::new(CustomMockBrewService));
 
-        let args = Args::parse_from([APP, "brew", "export"]);
+        let args = Args::parse_from([APP_NAME, "brew", "export"]);
 
         let result = run(args, &mock_service_provider).await;
         assert!(result.is_ok());
@@ -280,7 +279,7 @@ mod tests {
             .expect_fish_service()
             .returning(|| Arc::new(CustomMockFishService));
 
-        let args = Args::parse_from([APP, "fish", "install"]);
+        let args = Args::parse_from([APP_NAME, "fish", "install"]);
 
         let result = run(args, &mock_service_provider).await;
         assert!(result.is_ok());
@@ -294,7 +293,7 @@ mod tests {
             .expect_fish_service()
             .returning(|| Arc::new(CustomMockFishService));
 
-        let args = Args::parse_from([APP, "fish", "default"]);
+        let args = Args::parse_from([APP_NAME, "fish", "default"]);
 
         let result = run(args, &mock_service_provider).await;
         assert!(result.is_ok());
@@ -308,7 +307,7 @@ mod tests {
             .expect_fish_service()
             .returning(|| Arc::new(CustomMockFishService));
 
-        let args = Args::parse_from([APP, "fish", "fisher"]);
+        let args = Args::parse_from([APP_NAME, "fish", "fisher"]);
 
         let result = run(args, &mock_service_provider).await;
         assert!(result.is_ok());
@@ -322,7 +321,7 @@ mod tests {
             .expect_vscode_service()
             .returning(|| Arc::new(CustomMockVSCodeService));
 
-        let args = Args::parse_from([APP, "vscode", "export"]);
+        let args = Args::parse_from([APP_NAME, "vscode", "export"]);
 
         let result = run(args, &mock_service_provider).await;
         assert!(result.is_ok());
@@ -336,7 +335,7 @@ mod tests {
             .expect_vscode_service()
             .returning(|| Arc::new(CustomMockVSCodeService));
 
-        let args = Args::parse_from([APP, "vscode", "import"]);
+        let args = Args::parse_from([APP_NAME, "vscode", "import"]);
 
         let result = run(args, &mock_service_provider).await;
         assert!(result.is_ok());
@@ -350,7 +349,7 @@ mod tests {
             .expect_vscode_service()
             .returning(|| Arc::new(CustomMockVSCodeService));
 
-        let args = Args::parse_from([APP, "vscode", "code"]);
+        let args = Args::parse_from([APP_NAME, "vscode", "code"]);
 
         let result = run(args, &mock_service_provider).await;
         assert!(result.is_ok());
