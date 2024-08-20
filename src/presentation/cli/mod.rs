@@ -1,11 +1,11 @@
-use crate::application::service_provider::ServiceProvider;
 use crate::error::AppError;
+use crate::{application::service_provider::ServiceProvider, constants::APP_NAME};
 use clap::{ArgAction, Parser, Subcommand};
 
 mod commands;
 
 #[derive(Parser)]
-#[command(name = "widots")]
+#[command(name = APP_NAME)]
 #[command(author, version, about, long_about = None)]
 #[command(color = clap::ColorChoice::Always)]
 #[command(help_expected = true)]
