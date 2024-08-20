@@ -84,6 +84,7 @@ impl ProductionServiceProvider {
             vscode_service: Arc::new(VSCodeServiceImpl::new(
                 shell_executor.clone(),
                 fs_operations.clone(),
+                os_detector.clone(),
             )),
         })
     }
@@ -167,6 +168,7 @@ impl TestServiceProvider {
             vscode_service: Arc::new(VSCodeServiceImpl::new(
                 shell_executor.clone(),
                 fs_operations.clone(),
+                os_detector.clone(),
             )),
         }
     }
