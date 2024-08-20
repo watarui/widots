@@ -69,9 +69,6 @@ jobs:
   coverage:
     needs: check
     runs-on: ubuntu-latest
-    container:
-      image: xd009642/tarpaulin:develop
-      options: --security-opt seccomp=unconfined
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -79,24 +76,29 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - uses: actions/cache@v3
+          components: llvm-tools-preview
+      - name: Install grcov
+        run: cargo install grcov
+      - name: Build
+        uses: actions-rs/cargo@v1
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Generate code coverage
+          command: build
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all-features --no-fail-fast
+        env:
+          CARGO_INCREMENTAL: "0"
+          RUSTFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests"
+          RUSTDOCFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests"
+      - name: Generate coverage
         run: |
-          cargo tarpaulin \
-          --verbose \
-          --all-features \
-          --timeout 120 \
-          --out xml \
-          --ignore-tests \
-          --exclude-files tests/* \
-          -- \
-          --test-threads 4
+          grcov . -s . --binary-path ./target/debug/ -t lcov --branch --ignore-not-existing --ignore "/*" -o lcov.info
+      - name: Check coverage
+        run: |
+          total_coverage=$(grcov . -s . --binary-path ./target/debug/ -t covdir --branch --ignore-not-existing --ignore "/*" | jq .coveragePercent)
+          echo "Coverage: $total_coverage%"
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4.0.1
         with:
