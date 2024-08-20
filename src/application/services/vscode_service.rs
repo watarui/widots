@@ -284,7 +284,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_ensure_code_command_macos_vscode_exists() {
+    async fn test_ensure_code_command_macos() {
         let mut mock_shell = MockShellExecutor::new();
         let mock_fs = MockFileSystemOperations::new();
         let mut mock_os = MockOSOperations::new();
@@ -298,43 +298,25 @@ mod test {
             .expect_get_os()
             .returning(|| Ok("macos".to_string()));
 
-        mock_shell
-            .expect_execute()
-            .with(eq(r#"ln -s "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" /usr/local/bin/code"#))
-            .returning(|_| Ok("Symlink created".to_string()));
-
+        if Path::new("/Applications/Visual Studio Code.app").exists() {
+            mock_shell
+              .expect_execute()
+              .with(eq(r#"ln -s "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" /usr/local/bin/code"#))
+              .returning(|_| Ok("Symlink created".to_string()));
+        }
         let vscode_service =
             VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs), Arc::new(mock_os));
 
         let result = vscode_service.ensure_code_command().await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_ensure_code_command_macos_vscode_not_exists() {
-        let mut mock_shell = MockShellExecutor::new();
-        let mock_fs = MockFileSystemOperations::new();
-        let mut mock_os = MockOSOperations::new();
-
-        mock_shell
-            .expect_execute()
-            .with(eq("which code"))
-            .returning(|_| Err(AppError::ShellExecution("Command not found".to_string())));
-
-        mock_os
-            .expect_get_os()
-            .returning(|| Ok("macos".to_string()));
-
-        mock_shell
-            .expect_execute()
-            .with(eq(r#"ln -s "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" /usr/local/bin/code"#))
-            .returning(|_| Ok("Symlink created".to_string()));
-
-        let vscode_service =
-            VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs), Arc::new(mock_os));
-
-        let result = vscode_service.ensure_code_command().await;
-        assert!(result.is_ok());
+        if Path::new("/Applications/Visual Studio Code.app").exists() {
+            assert!(result.is_ok());
+        } else {
+            assert!(result.is_err());
+            assert!(matches!(
+                result.unwrap_err(),
+                AppError::CodeCommandNotInstalled
+            ));
+        }
     }
 
     #[tokio::test]
