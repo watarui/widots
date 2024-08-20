@@ -75,10 +75,12 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
       - name: Generate code coverage
         run: |
           cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out xml
+      - name: Upload to codecov.io
         uses: codecov/codecov-action@v4.0.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
