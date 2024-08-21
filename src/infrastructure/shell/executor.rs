@@ -275,7 +275,7 @@ mod tests {
         let rt = Runtime::new().unwrap();
         let executor = SystemShellExecutor::new();
 
-        // 無効な UTF-8 シーケンスを含むファイルを作成
+        // Create a file with invalid UTF-8 sequence
         let filename = "test_invalid_utf8.bin";
         let invalid_utf8 = [0xFF, 0xFE, 0xFD];
         {
