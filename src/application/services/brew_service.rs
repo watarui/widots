@@ -101,7 +101,6 @@ mod tests {
     use crate::infrastructure::fs::FileSystemOperations;
     use async_trait::async_trait;
     use mockall::mock;
-    use mockall::predicate::eq;
     use std::path::Path;
     use std::process::Output;
     use std::sync::Arc;
@@ -110,8 +109,8 @@ mod tests {
         ShellExecutor {}
         #[async_trait]
         impl ShellExecutor for ShellExecutor {
-            async fn execute(&self, command: &str, args: &[&str]) -> Result<String, AppError>;
-            async fn output(&self, command: &str, args: &[&str]) -> Result<Output, AppError>;
+            async fn execute<'a>(&self, command: &'a str, args: &'a [&'a str]) -> Result<String, AppError>;
+            async fn output<'a>(&self, command: &'a str, args: &'a [&'a str]) -> Result<Output, AppError>;
             fn stderr(&self, output: &Output) -> String;
         }
     }
@@ -132,7 +131,9 @@ mod tests {
 
         mock_shell
             .expect_execute()
-            .with(eq("bash"), eq(vec!["-c", "\"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""]))
+            .withf(|cmd: &str, args: &[&str]| {
+                cmd == "bash" && args == ["-c", "\"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""]
+            })
             .returning(|_, _| Ok("Homebrew installed successfully".to_string()));
 
         let brew_service = BrewServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));

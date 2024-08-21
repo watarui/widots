@@ -21,7 +21,7 @@ impl SystemShellExecutor {
 
 #[async_trait]
 impl ShellExecutor for SystemShellExecutor {
-    async fn execute(&self, command: &str, args: &[&str]) -> Result<String, AppError> {
+    async fn execute<'a>(&self, command: &'a str, args: &'a [&'a str]) -> Result<String, AppError> {
         let output = Command::new(command)
             .args(args)
             .output()
@@ -39,7 +39,7 @@ impl ShellExecutor for SystemShellExecutor {
         }
     }
 
-    async fn output(&self, command: &str, args: &[&str]) -> Result<Output, AppError> {
+    async fn output<'a>(&self, command: &'a str, args: &'a [&'a str]) -> Result<Output, AppError> {
         Command::new(command)
             .args(args)
             .output()
@@ -66,8 +66,8 @@ mod tests {
 
         #[async_trait]
         impl ShellExecutor for SystemShellExecutor {
-            async fn execute(&self, command: &str, args: &[&str]) -> Result<String, AppError>;
-            async fn output(&self, command: &str, args: &[&str]) -> Result<Output, AppError>;
+            async fn execute<'a>(&self, command: &'a str, args: &'a [&'a str]) -> Result<String, AppError>;
+            async fn output<'a>(&self, command: &'a str, args: &'a [&'a str]) -> Result<Output, AppError>;
             fn stderr(&self, output: &Output) -> String;
         }
     }
@@ -77,7 +77,7 @@ mod tests {
         let rt = Runtime::new().unwrap();
         let mut mock = MockSystemShellExecutor::new();
         mock.expect_execute()
-            .with(eq("echo"), eq(vec!["Hello, World!"]))
+            .withf(|cmd: &str, args: &[&str]| cmd == "echo" && args == ["Hello, World!"])
             .returning(|_, _| Ok("Hello, World!".to_string()));
 
         let result = rt.block_on(mock.execute("echo", &["Hello, World!"]));
@@ -90,7 +90,9 @@ mod tests {
         let rt = Runtime::new().unwrap();
         let mut mock = MockSystemShellExecutor::new();
         mock.expect_execute()
-            .with(eq("non_existent_command"), eq(Vec::<&str>::new()))
+            .withf(|cmd: &str, args: &[&str]| {
+                cmd == "non_existent_command" && args == Vec::<&str>::new()
+            })
             .returning(|_, _| Err(AppError::ShellExecution("Command not found".to_string())));
 
         let result = rt.block_on(mock.execute("non_existent_command", &[]));
@@ -115,7 +117,7 @@ mod tests {
         let rt = Runtime::new().unwrap();
         let mut mock = MockSystemShellExecutor::new();
         mock.expect_output()
-            .with(eq("echo"), eq(vec!["Hello, World!"]))
+            .withf(|cmd: &str, args: &[&str]| cmd == "echo" && args == ["Hello, World!"])
             .returning(|_, _| {
                 Ok(Output {
                     status: ExitStatus::from_raw(0), // 0 is usually the success exit code
