@@ -101,6 +101,7 @@ mod tests {
     use crate::infrastructure::fs::FileSystemOperations;
     use async_trait::async_trait;
     use mockall::mock;
+    use std::io::{Error, ErrorKind};
     use std::path::Path;
     use std::process::Output;
     use std::sync::Arc;
@@ -190,6 +191,93 @@ mod tests {
         let brew_service = BrewServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
 
         let result = brew_service.install().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_brew_import_file_not_found() {
+        let mock_shell = MockShellExecutor::new();
+        let mut mock_fs = MockFileSystemOperations::new();
+
+        mock_fs.expect_read_lines().returning(|_| {
+            Err(AppError::Io(Error::new(
+                ErrorKind::NotFound,
+                "File not found",
+            )))
+        });
+
+        let brew_service = BrewServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
+
+        let result = brew_service.import().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_brew_import_package_install_failure() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mut mock_fs = MockFileSystemOperations::new();
+
+        mock_fs
+            .expect_read_lines()
+            .returning(|_| Ok(vec!["package1".to_string()]));
+
+        mock_shell
+            .expect_execute()
+            .withf(|cmd: &str, args: &[&str]| cmd == "brew" && args == ["install", "package1"])
+            .returning(|_, _| {
+                Err(AppError::ShellExecution(
+                    "Package installation failed".to_string(),
+                ))
+            });
+
+        let brew_service = BrewServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
+
+        let result = brew_service.import().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_brew_export_command_failure() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mock_fs = MockFileSystemOperations::new();
+
+        mock_shell
+            .expect_execute()
+            .withf(|cmd: &str, args: &[&str]| cmd == "brew" && args == ["leaves"])
+            .returning(|_, _| {
+                Err(AppError::ShellExecution(
+                    "Command execution failed".to_string(),
+                ))
+            });
+
+        let brew_service = BrewServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
+
+        let result = brew_service.export().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_brew_export_write_failure() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mut mock_fs = MockFileSystemOperations::new();
+
+        mock_shell
+            .expect_execute()
+            .withf(|cmd: &str, args: &[&str]| {
+                cmd == "brew" && (args == ["leaves"] || args == ["list", "--cask"])
+            })
+            .returning(|_, _| Ok("package1\npackage2".to_string()));
+
+        mock_fs.expect_write_lines().returning(|_, _| {
+            Err(AppError::Io(Error::new(
+                ErrorKind::PermissionDenied,
+                "Permission denied",
+            )))
+        });
+
+        let brew_service = BrewServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
+
+        let result = brew_service.export().await;
         assert!(result.is_err());
     }
 
