@@ -1,6 +1,6 @@
 use fern::colors::{Color, ColoredLevelConfig};
-use log::LevelFilter;
-use std::sync::Once;
+use log::{LevelFilter, Record};
+use std::{fmt::Arguments, sync::Once};
 
 static INIT: Once = Once::new();
 
@@ -22,11 +22,8 @@ fn internal_setup_logger(level: LevelFilter) -> Result<(), fern::InitError> {
     fern::Dispatch::new()
         .format(move |out, message, record| {
             out.finish(format_args!(
-                "{}[{}][{}] {}",
-                chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
-                record.target(),
-                colors.color(record.level()),
-                message
+                "{}",
+                format_log_message(&colors, message, record)
             ))
         })
         .level(level)
@@ -36,10 +33,19 @@ fn internal_setup_logger(level: LevelFilter) -> Result<(), fern::InitError> {
     Ok(())
 }
 
+fn format_log_message(colors: &ColoredLevelConfig, message: &Arguments, record: &Record) -> String {
+    format!(
+        "{}[{}][{}] {}",
+        chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
+        record.target(),
+        colors.color(record.level()),
+        message
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Local;
     use log::{Level, Record};
 
     #[test]
@@ -66,15 +72,13 @@ mod tests {
             .target("test_target")
             .build();
 
-        let formatted_log = format!(
-            "{}[{}][{}] {}",
-            Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
-            record.target(),
-            colors.color(record.level()),
-            record.args()
-        );
+        let formatted_log = format_log_message(&colors, record.args(), &record);
 
-        assert!(formatted_log.contains(&Local::now().format("[%Y-%m-%d][%H:%M:%S]").to_string()));
+        assert!(formatted_log.contains(
+            &chrono::Local::now()
+                .format("[%Y-%m-%d][%H:%M:%S]")
+                .to_string()
+        ));
         assert!(formatted_log.contains("[test_target]"));
         assert!(formatted_log.contains("INFO"));
         assert!(formatted_log.contains("Test message"));
