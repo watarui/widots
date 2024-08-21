@@ -5,7 +5,7 @@ use async_trait::async_trait;
 
 #[async_trait]
 pub trait ShellExecutor: Send + Sync {
-    async fn execute(&self, command: &str) -> Result<String, AppError>;
-    async fn output(&self, command: &str) -> Result<Output, AppError>;
+    async fn execute<'a>(&self, command: &'a str, args: &'a [&'a str]) -> Result<String, AppError>;
+    async fn output<'a>(&self, command: &'a str, args: &'a [&'a str]) -> Result<Output, AppError>;
     fn stderr(&self, output: &Output) -> String;
 }

@@ -75,8 +75,9 @@ impl LoadServiceImpl {
             .write_all(script.as_bytes())
             .map_err(AppError::Io)?;
 
-        let command = format!("bash {}", temp_file.path().display());
-        self.shell_executor.execute(&command).await?;
+        self.shell_executor
+            .execute("bash", &[temp_file.path().to_str().unwrap()])
+            .await?;
         Ok(())
     }
 
@@ -135,6 +136,7 @@ mod test {
     use serde::de::Error;
     use std::path::Path;
     use std::path::PathBuf;
+    use std::process::Output;
     use std::sync::Arc;
 
     mock! {
@@ -184,9 +186,9 @@ mod test {
         ShellExecutor {}
         #[async_trait]
         impl ShellExecutor for ShellExecutor {
-            async fn execute(&self, command: &str) -> Result<String, AppError>;
-            async fn output(&self, command: &str) -> Result<std::process::Output, AppError>;
-            fn stderr(&self, output: &std::process::Output) -> String;
+            async fn execute<'a>(&self, command: &'a str, args: &'a [&'a str]) -> Result<String, AppError>;
+            async fn output<'a>(&self, command: &'a str, args: &'a [&'a str]) -> Result<Output, AppError>;
+            fn stderr(&self, output: &Output) -> String;
         }
     }
 
@@ -276,7 +278,7 @@ mod test {
 
         mock_shell
             .expect_execute()
-            .returning(|_| Ok("Provision executed successfully".to_string()));
+            .returning(|_, _| Ok("Provision executed successfully".to_string()));
 
         let load_service = LoadServiceImpl::new(
             Arc::new(mock_link_ops),
@@ -291,6 +293,40 @@ mod test {
             .load(Path::new("/config.toml"), Path::new("/target"))
             .await;
 
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_load_empty_config() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let config_path = temp_file.path().to_path_buf();
+        let target = PathBuf::from("/target");
+
+        let mock_link_ops = MockLinkOperations::new();
+        let mut mock_path_ops = MockPathOperations::new();
+        let mut mock_toml_parser = MockTomlOperations::new();
+        let mock_os_detector = MockOSOperations::new();
+        let mock_shell_executor = MockShellExecutor::new();
+        let mock_prompter = MockPromptOperations::new();
+
+        mock_path_ops
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
+
+        mock_toml_parser
+            .expect_parse()
+            .returning(|_| Ok(Config::default()));
+
+        let load_service = LoadServiceImpl::new(
+            Arc::new(mock_link_ops),
+            Arc::new(mock_path_ops),
+            Arc::new(mock_toml_parser),
+            Arc::new(mock_os_detector),
+            Arc::new(mock_shell_executor),
+            Arc::new(mock_prompter),
+        );
+
+        let result = load_service.load(&config_path, &target).await;
         assert!(result.is_ok());
     }
 
@@ -320,7 +356,6 @@ mod test {
             .load(Path::new("/config.toml"), Path::new("/target"))
             .await;
 
-        println!("{:?}", result);
         assert!(matches!(result, Err(AppError::TomlParse(_))));
     }
 
@@ -459,7 +494,7 @@ mod test {
         let mut mock_shell = MockShellExecutor::new();
         let mock_prompt_ops = MockPromptOperations::new();
 
-        mock_shell.expect_execute().returning(|_| {
+        mock_shell.expect_execute().returning(|_, _| {
             Err(AppError::ShellExecution(
                 "Failed to execute script".to_string(),
             ))

@@ -45,10 +45,22 @@ impl DeployServiceImpl {
             return Err(AppError::FileNotFound(source.to_path_buf()));
         }
 
-        let command = format!("sudo cp {} {}", source.display(), destination.display());
-        self.shell_executor.execute(&command).await?;
-        let command = format!("sudo chmod +x {}", destination.display());
-        self.shell_executor.execute(&command).await?;
+        self.shell_executor
+            .execute(
+                "sudo",
+                &[
+                    "cp",
+                    source.display().to_string().as_str(),
+                    destination.display().to_string().as_str(),
+                ],
+            )
+            .await?;
+        self.shell_executor
+            .execute(
+                "sudo",
+                &["chmod", "+x", destination.display().to_string().as_str()],
+            )
+            .await?;
 
         Ok(())
     }
@@ -80,7 +92,10 @@ impl DeployService for DeployServiceImpl {
         println!("Starting deployment process...");
 
         println!("Building the project in release mode...");
-        let output = self.shell_executor.output("cargo build --release").await?;
+        let output = self
+            .shell_executor
+            .output("cargo", &["build", "--release"])
+            .await?;
         if !output.status.success() {
             let error = self.shell_executor.stderr(&output);
             println!("Build failed. Error: {}", error);
@@ -114,10 +129,10 @@ mod test {
     use crate::error::AppError;
     use async_trait::async_trait;
     use mockall::mock;
-    use mockall::predicate::eq;
     use std::os::unix::process::ExitStatusExt;
     use std::path::Path;
     use std::path::PathBuf;
+    use std::process::Output;
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::time::timeout;
@@ -126,9 +141,9 @@ mod test {
         ShellExecutor {}
         #[async_trait]
         impl ShellExecutor for ShellExecutor {
-            async fn execute(&self, command: &str) -> Result<String, AppError>;
-            async fn output(&self, command: &str) -> Result<std::process::Output, AppError>;
-            fn stderr(&self, output: &std::process::Output) -> String;
+            async fn execute<'a>(&self, command: &'a str, args: &'a [&'a str]) -> Result<String, AppError>;
+            async fn output<'a>(&self, command: &'a str, args: &'a [&'a str]) -> Result<Output, AppError>;
+            fn stderr(&self, output: &Output) -> String;
         }
     }
     mock! {
@@ -157,8 +172,8 @@ mod test {
 
         mock_shell
             .expect_output()
-            .with(eq("cargo build --release"))
-            .returning(|_| {
+            .withf(|cmd: &str, args: &[&str]| cmd == "cargo" && args == ["build", "--release"])
+            .returning(|_, _| {
                 Ok(std::process::Output {
                     status: std::process::ExitStatus::from_raw(0),
                     stdout: vec![],
@@ -168,7 +183,7 @@ mod test {
 
         mock_shell
             .expect_execute()
-            .returning(|_| Ok("Command executed successfully".to_string()));
+            .returning(|_, _| Ok("Command executed successfully".to_string()));
 
         mock_path
             .expect_parse_path()
@@ -194,7 +209,7 @@ mod test {
 
         mock_shell
             .expect_execute()
-            .returning(|_| Err(AppError::ShellExecution("Deployment failed".to_string())));
+            .returning(|_, _| Err(AppError::ShellExecution("Deployment failed".to_string())));
 
         let deploy_service =
             DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), true);
@@ -231,7 +246,7 @@ mod test {
         mock_shell
             .expect_execute()
             .times(2)
-            .returning(|_cmd| Ok("Command executed successfully".to_string()));
+            .returning(|_, _| Ok("Command executed successfully".to_string()));
 
         let deploy_service =
             DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), true);
@@ -295,8 +310,8 @@ mod test {
 
         mock_shell
             .expect_output()
-            .with(eq("cargo build --release"))
-            .returning(|_| {
+            .withf(|cmd: &str, args: &[&str]| cmd == "cargo" && args == ["build", "--release"])
+            .returning(|_, _| {
                 Ok(std::process::Output {
                     status: std::process::ExitStatus::from_raw(0),
                     stdout: vec![],
@@ -306,7 +321,7 @@ mod test {
 
         mock_shell
             .expect_execute()
-            .returning(|_cmd| Ok("Command executed successfully".to_string()));
+            .returning(|_, _| Ok("Command executed successfully".to_string()));
 
         mock_path
             .expect_parse_path()
@@ -345,8 +360,8 @@ mod test {
 
         mock_shell
             .expect_output()
-            .with(eq("cargo build --release"))
-            .returning(|_| {
+            .withf(|cmd: &str, args: &[&str]| cmd == "cargo" && args == ["build", "--release"])
+            .returning(|_, _| {
                 Ok(std::process::Output {
                     status: std::process::ExitStatus::from_raw(1),
                     stdout: vec![],
