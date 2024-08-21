@@ -29,12 +29,10 @@ impl ShellExecutor for SystemShellExecutor {
             .map_err(|e| AppError::ShellExecution(format!("Failed to execute command: {}", e)))?;
 
         if output.status.success() {
-            String::from_utf8(output.stdout).map_err(|e| {
-                AppError::ShellExecution(format!("Failed to parse command output: {}", e))
-            })
+            Ok(String::from_utf8_lossy(&output.stdout).into_owned())
         } else {
             Err(AppError::ShellExecution(
-                String::from_utf8_lossy(&output.stderr).to_string(),
+                String::from_utf8_lossy(&output.stderr).into_owned(),
             ))
         }
     }
@@ -54,7 +52,12 @@ impl ShellExecutor for SystemShellExecutor {
 
 #[cfg(test)]
 mod tests {
-    use std::{os::unix::process::ExitStatusExt, process::ExitStatus};
+    use std::{
+        fs::{remove_file, File},
+        io::Write,
+        os::unix::process::ExitStatusExt,
+        process::ExitStatus,
+    };
 
     use super::*;
     use mockall::{mock, predicate::*};
@@ -225,5 +228,124 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(matches!(err, AppError::ShellExecution(msg) if msg == "Command failed"));
+    }
+
+    #[test]
+    fn test_execute_success() {
+        let rt = Runtime::new().unwrap();
+        let mut mock = MockSystemShellExecutor::new();
+        mock.expect_output()
+            .withf(|cmd: &str, args: &[&str]| cmd == "echo" && args == ["Hello"])
+            .returning(|_, _| {
+                Ok(Output {
+                    status: ExitStatus::from_raw(0),
+                    stdout: b"Hello\n".to_vec(),
+                    stderr: vec![],
+                })
+            });
+
+        let result = rt.block_on(async {
+            let executor = SystemShellExecutor::new();
+            executor.execute("echo", &["Hello"]).await
+        });
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "Hello\n");
+    }
+
+    #[test]
+    fn test_execute_failure() {
+        let rt = Runtime::new().unwrap();
+        let executor = SystemShellExecutor::new();
+
+        let result = rt.block_on(async { executor.execute("non_existent_command", &[]).await });
+
+        assert!(result.is_err());
+        match result {
+            Err(AppError::ShellExecution(msg)) => {
+                assert!(msg.starts_with("Failed to execute command:"));
+                assert!(msg.contains("No such file or directory"));
+            }
+            _ => panic!("Expected AppError::ShellExecution, got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn test_execute_invalid_utf8() {
+        let rt = Runtime::new().unwrap();
+        let executor = SystemShellExecutor::new();
+
+        // 無効な UTF-8 シーケンスを含むファイルを作成
+        let filename = "test_invalid_utf8.bin";
+        let invalid_utf8 = [0xFF, 0xFE, 0xFD];
+        {
+            let mut file = File::create(filename).unwrap();
+            file.write_all(&invalid_utf8).unwrap();
+        }
+
+        let result = rt.block_on(async { executor.execute("cat", &[filename]).await });
+
+        // Cleanup the file after the test
+        remove_file(filename).unwrap();
+
+        assert!(
+            result.is_ok(),
+            "execute should succeed even with invalid UTF-8"
+        );
+        let output = result.unwrap();
+
+        // Verification at the output level
+        assert_eq!(
+            output, "���",
+            "Output should be three replacement characters"
+        );
+        assert_eq!(
+            output,
+            String::from_utf8_lossy(&invalid_utf8).to_string(),
+            "Output should match String::from_utf8_lossy result"
+        );
+
+        // Verification at the byte level
+        assert_eq!(
+            output.len(),
+            9,
+            "Output should be 9 bytes long (3 bytes per replacement character)"
+        );
+        assert_eq!(
+            output.as_bytes(),
+            [0xEF, 0xBF, 0xBD, 0xEF, 0xBF, 0xBD, 0xEF, 0xBF, 0xBD],
+            "Output bytes should be the UTF-8 encoding of three replacement characters"
+        );
+
+        // Verification at the character level
+        assert_eq!(
+            output.chars().count(),
+            3,
+            "Output should contain 3 characters"
+        );
+        assert!(
+            output.chars().all(|c| c == '\u{FFFD}'),
+            "All characters should be the replacement character"
+        );
+
+        let char_vec: Vec<char> = output.chars().collect();
+        assert_eq!(
+            char_vec,
+            vec!['\u{FFFD}', '\u{FFFD}', '\u{FFFD}'],
+            "Output should be exactly three replacement characters"
+        );
+    }
+
+    #[test]
+    fn test_output_method() {
+        let rt = Runtime::new().unwrap();
+        let executor = SystemShellExecutor::new();
+
+        let result = rt.block_on(executor.output("echo", &["Hello"]));
+
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "Hello\n");
     }
 }

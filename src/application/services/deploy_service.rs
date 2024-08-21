@@ -379,4 +379,88 @@ mod test {
         let result = deploy_service.execute().await;
         assert!(matches!(result, Err(AppError::Deployment(_))));
     }
+
+    #[tokio::test]
+    async fn test_deploy_executable_file_not_found() {
+        let mock_shell = MockShellExecutor::new();
+        let mut mock_path = MockPathOperations::new();
+
+        mock_path
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
+
+        let deploy_service =
+            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), false);
+
+        // Set DEPLOY_SOURCE_PATH to a non-existent file
+        std::env::set_var("DEPLOY_SOURCE_PATH", "/non/existent/path");
+
+        let result = deploy_service.deploy_executable().await;
+        assert!(matches!(result, Err(AppError::FileNotFound(_))));
+
+        // Clean up
+        std::env::remove_var("DEPLOY_SOURCE_PATH");
+    }
+
+    #[tokio::test]
+    async fn test_execute_deployment_failure() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mut mock_path = MockPathOperations::new();
+
+        mock_shell
+            .expect_output()
+            .withf(|cmd: &str, args: &[&str]| cmd == "cargo" && args == ["build", "--release"])
+            .returning(|_, _| {
+                Ok(std::process::Output {
+                    status: std::process::ExitStatus::from_raw(0),
+                    stdout: vec![],
+                    stderr: vec![],
+                })
+            });
+
+        mock_shell
+            .expect_execute()
+            .returning(|_, _| Err(AppError::ShellExecution("Deployment failed".to_string())));
+
+        mock_path
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
+
+        let deploy_service =
+            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), true);
+
+        let result = deploy_service.execute().await;
+        assert!(matches!(result, Err(AppError::ShellExecution(_))));
+    }
+
+    #[tokio::test]
+    async fn test_execute_locate_fish_completions_failure() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mut mock_path = MockPathOperations::new();
+
+        mock_shell
+            .expect_output()
+            .withf(|cmd: &str, args: &[&str]| cmd == "cargo" && args == ["build", "--release"])
+            .returning(|_, _| {
+                Ok(std::process::Output {
+                    status: std::process::ExitStatus::from_raw(0),
+                    stdout: vec![],
+                    stderr: vec![],
+                })
+            });
+
+        mock_shell
+            .expect_execute()
+            .returning(|_, _| Ok("Command executed successfully".to_string()));
+
+        mock_path
+            .expect_parse_path()
+            .returning(|_| Err(AppError::Deployment("Invalid path".to_string())));
+
+        let deploy_service =
+            DeployServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_path), true);
+
+        let result = deploy_service.execute().await;
+        assert!(matches!(result, Err(AppError::Deployment(_))));
+    }
 }
