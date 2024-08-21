@@ -45,10 +45,22 @@ impl DeployServiceImpl {
             return Err(AppError::FileNotFound(source.to_path_buf()));
         }
 
-        let command = format!("sudo cp {} {}", source.display(), destination.display());
-        self.shell_executor.execute(&command).await?;
-        let command = format!("sudo chmod +x {}", destination.display());
-        self.shell_executor.execute(&command).await?;
+        self.shell_executor
+            .execute(
+                "sudo",
+                &[
+                    "cp",
+                    source.display().to_string().as_str(),
+                    destination.display().to_string().as_str(),
+                ],
+            )
+            .await?;
+        self.shell_executor
+            .execute(
+                "sudo",
+                &["chmod", "+x", destination.display().to_string().as_str()],
+            )
+            .await?;
 
         Ok(())
     }
@@ -80,7 +92,10 @@ impl DeployService for DeployServiceImpl {
         println!("Starting deployment process...");
 
         println!("Building the project in release mode...");
-        let output = self.shell_executor.output("cargo build --release").await?;
+        let output = self
+            .shell_executor
+            .output("cargo", &["build", "--release"])
+            .await?;
         if !output.status.success() {
             let error = self.shell_executor.stderr(&output);
             println!("Build failed. Error: {}", error);
@@ -118,6 +133,7 @@ mod test {
     use std::os::unix::process::ExitStatusExt;
     use std::path::Path;
     use std::path::PathBuf;
+    use std::process::Output;
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::time::timeout;
@@ -126,9 +142,9 @@ mod test {
         ShellExecutor {}
         #[async_trait]
         impl ShellExecutor for ShellExecutor {
-            async fn execute(&self, command: &str) -> Result<String, AppError>;
-            async fn output(&self, command: &str) -> Result<std::process::Output, AppError>;
-            fn stderr(&self, output: &std::process::Output) -> String;
+            async fn execute(&self, command: &str, args: &[&str]) -> Result<String, AppError>;
+            async fn output(&self, command: &str, args: &[&str]) -> Result<Output, AppError>;
+            fn stderr(&self, output: &Output) -> String;
         }
     }
     mock! {

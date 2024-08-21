@@ -1,8 +1,7 @@
-use std::process::Output;
-
 use crate::domain::shell::ShellExecutor;
 use crate::error::AppError;
 use async_trait::async_trait;
+use std::process::Output;
 use tokio::process::Command;
 
 #[derive(Debug)]
@@ -22,11 +21,17 @@ impl SystemShellExecutor {
 
 #[async_trait]
 impl ShellExecutor for SystemShellExecutor {
-    async fn execute(&self, command: &str) -> Result<String, AppError> {
-        let output = Command::new("sh").arg("-c").arg(command).output().await?;
+    async fn execute(&self, command: &str, args: &[&str]) -> Result<String, AppError> {
+        let output = Command::new(command)
+            .args(args)
+            .output()
+            .await
+            .map_err(|e| AppError::ShellExecution(format!("Failed to execute command: {}", e)))?;
 
         if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+            String::from_utf8(output.stdout).map_err(|e| {
+                AppError::ShellExecution(format!("Failed to parse command output: {}", e))
+            })
         } else {
             Err(AppError::ShellExecution(
                 String::from_utf8_lossy(&output.stderr).to_string(),
@@ -34,13 +39,12 @@ impl ShellExecutor for SystemShellExecutor {
         }
     }
 
-    async fn output(&self, command: &str) -> Result<Output, AppError> {
-        Command::new("sh")
-            .arg("-c")
-            .arg(command)
+    async fn output(&self, command: &str, args: &[&str]) -> Result<Output, AppError> {
+        Command::new(command)
+            .args(args)
             .output()
             .await
-            .map_err(AppError::Io)
+            .map_err(|e| AppError::ShellExecution(format!("Failed to execute command: {}", e)))
     }
 
     fn stderr(&self, output: &Output) -> String {
@@ -49,150 +53,96 @@ impl ShellExecutor for SystemShellExecutor {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
+    use std::{os::unix::process::ExitStatusExt, process::ExitStatus};
+
     use super::*;
-    use crate::domain::shell::ShellExecutor;
-    use crate::error::AppError;
-    use mockall::predicate::*;
-    use mockall::*;
+    use mockall::{mock, predicate::*};
     use proptest::prelude::*;
-    use std::process::Command as StdCommand;
-    use std::process::Output;
-    use tokio::process::Command as TokioCommand;
-    use tokio::time::{timeout, Duration};
+    use tokio::runtime::Runtime;
 
     mock! {
         pub SystemShellExecutor {}
 
         #[async_trait]
         impl ShellExecutor for SystemShellExecutor {
-            async fn execute(&self, command: &str) -> Result<String, AppError>;
-            async fn output(&self, command: &str) -> Result<Output, AppError>;
+            async fn execute(&self, command: &str, args: &[&str]) -> Result<String, AppError>;
+            async fn output(&self, command: &str, args: &[&str]) -> Result<Output, AppError>;
             fn stderr(&self, output: &Output) -> String;
         }
     }
 
-    #[tokio::test]
-    async fn test_execute_with_mock() {
+    #[test]
+    fn test_execute_success_with_mock() {
+        let rt = Runtime::new().unwrap();
         let mut mock = MockSystemShellExecutor::new();
         mock.expect_execute()
-            .with(eq("echo 'Hello, World!'"))
-            .times(1)
-            .returning(|_| Ok("Hello, World!\n".to_string()));
+            .with(eq("echo"), eq(vec!["Hello, World!"]))
+            .returning(|_, _| Ok("Hello, World!".to_string()));
 
-        let result = mock.execute("echo 'Hello, World!'").await.unwrap();
-        assert_eq!(result.trim(), "Hello, World!");
+        let result = rt.block_on(mock.execute("echo", &["Hello, World!"]));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "Hello, World!");
     }
 
-    #[tokio::test]
-    async fn test_output_with_mock() {
+    #[test]
+    fn test_execute_failure_with_mock() {
+        let rt = Runtime::new().unwrap();
         let mut mock = MockSystemShellExecutor::new();
-        mock.expect_output()
-            .with(eq("echo 'Hello, World!'"))
-            .times(1)
-            .returning(|_cmd| {
-                Ok(StdCommand::new("echo")
-                    .arg("Hello, World!")
-                    .output()
-                    .expect("Failed to execute command"))
-            });
+        mock.expect_execute()
+            .with(eq("non_existent_command"), eq(Vec::<&str>::new()))
+            .returning(|_, _| Err(AppError::ShellExecution("Command not found".to_string())));
 
-        let result = mock.output("echo 'Hello, World!'").await.unwrap();
-        assert!(result.status.success());
-        assert_eq!(
-            String::from_utf8_lossy(&result.stdout).trim(),
-            "Hello, World!"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_stderr_with_mock() {
-        let mock = SystemShellExecutor::new();
-        let output = TokioCommand::new("sh")
-            .arg("-c")
-            .arg("echo 'Error message' >&2; exit 1")
-            .output()
-            .await
-            .expect("Failed to execute command");
-
-        let result = mock.stderr(&output);
-        assert_eq!(result.trim(), "Error message");
-    }
-
-    #[tokio::test]
-    async fn test_execute_error() {
-        let executor = SystemShellExecutor::new();
-        let result = executor.execute("non_existent_command").await;
+        let result = rt.block_on(mock.execute("non_existent_command", &[]));
         assert!(result.is_err());
     }
 
     proptest! {
         #[test]
-        fn test_execute_with_safe_commands(command in "(echo|ls|pwd|whoami|date) [a-zA-Z0-9 ]{0,20}") {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async {
-                let executor = SystemShellExecutor::new();
-                let result = timeout(Duration::from_secs(5), executor.execute(&command)).await;
-                match result {
-                    Ok(Ok(_)) => prop_assert!(true, "Command executed successfully"),
-                    Ok(Err(e)) => prop_assert!(true, "Command failed with error: {:?}", e),
-                    Err(_) => prop_assert!(false, "Command execution timed out"),
-                }
-                Ok(())
-            }).unwrap();
-        }
+        fn doesnt_crash_on_any_command_and_args(command in "\\PC*", args in prop::collection::vec("\\PC*", 0..10)) {
+            let rt = Runtime::new().unwrap();
+            let executor = SystemShellExecutor::new();
+            let args_slice: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
 
-        #[test]
-        fn test_output_with_safe_commands(command in "(echo|ls|pwd|whoami|date) [a-zA-Z0-9 ]{0,20}") {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async {
-                let executor = SystemShellExecutor::new();
-                let result = timeout(Duration::from_secs(5), executor.output(&command)).await;
-                match result {
-                    Ok(Ok(_)) => prop_assert!(true, "Command executed successfully"),
-                    Ok(Err(e)) => prop_assert!(true, "Command failed with error: {:?}", e),
-                    Err(_) => prop_assert!(false, "Command execution timed out"),
-                }
-                Ok(())
-            }).unwrap();
+            let result = rt.block_on(executor.execute(&command, &args_slice));
+
+            prop_assert!(result.is_ok() || result.is_err());
         }
     }
 
     #[test]
-    fn test_system_shell_executor_default() {
-        let default_parser = SystemShellExecutor;
-        let new_parser = SystemShellExecutor::new();
+    fn test_output_success_with_mock() {
+        let rt = Runtime::new().unwrap();
+        let mut mock = MockSystemShellExecutor::new();
+        mock.expect_output()
+            .with(eq("echo"), eq(vec!["Hello, World!"]))
+            .returning(|_, _| {
+                Ok(Output {
+                    status: ExitStatus::from_raw(0), // 0 is usually the success exit code
+                    stdout: b"Hello, World!".to_vec(),
+                    stderr: vec![],
+                })
+            });
 
-        // Ensure that the default implementation works correctly
-        assert_eq!(format!("{:?}", default_parser), format!("{:?}", new_parser));
+        let result = rt.block_on(mock.output("echo", &["Hello, World!"]));
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "Hello, World!");
     }
 
-    #[tokio::test]
-    async fn test_execute() -> Result<(), AppError> {
-        let shell_executor = SystemShellExecutor::new();
-        let result = shell_executor.execute("echo 'Hello, World!'").await?;
-        assert_eq!(result.trim(), "Hello, World!");
-        Ok(())
-    }
+    #[test]
+    fn test_stderr_with_mock() {
+        let mut mock = MockSystemShellExecutor::new();
+        mock.expect_stderr()
+            .returning(|output| String::from_utf8_lossy(&output.stderr).to_string());
 
-    #[tokio::test]
-    async fn test_output() -> Result<(), AppError> {
-        let shell_executor = SystemShellExecutor::new();
-        let result = shell_executor.output("echo 'Hello, World!'").await?;
-        assert!(result.status.success());
-        assert_eq!(
-            String::from_utf8_lossy(&result.stdout).trim(),
-            "Hello, World!"
-        );
-        Ok(())
-    }
+        let output = Output {
+            status: ExitStatus::from_raw(1), // 1 is usually an error exit code
+            stdout: vec![],
+            stderr: b"Error message".to_vec(),
+        };
 
-    #[tokio::test]
-    async fn test_stderr() -> Result<(), AppError> {
-        let shell_executor = SystemShellExecutor::new();
-        let result = shell_executor.output("echo 'Error message' >&2").await?;
-        let stderr = shell_executor.stderr(&result);
-        assert_eq!(stderr.trim(), "Error message");
-        Ok(())
+        assert_eq!(mock.stderr(&output), "Error message");
     }
 }

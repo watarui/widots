@@ -33,8 +33,11 @@ impl BrewServiceImpl {
 #[async_trait]
 impl BrewService for BrewServiceImpl {
     async fn install(&self) -> Result<(), AppError> {
-        let install_script = "/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"";
-        self.shell_executor.execute(install_script).await?;
+        let install_script =
+            "\"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"";
+        self.shell_executor
+            .execute("bash", &["-c", install_script])
+            .await?;
         Ok(())
     }
 
@@ -43,7 +46,7 @@ impl BrewService for BrewServiceImpl {
         let formulas = self.fs_operations.read_lines(import_path.as_path()).await?;
         for formula in formulas {
             self.shell_executor
-                .execute(&format!("brew install {}", formula))
+                .execute("brew", &["install", formula.as_str()])
                 .await?;
         }
 
@@ -51,7 +54,7 @@ impl BrewService for BrewServiceImpl {
         let casks = self.fs_operations.read_lines(import_path.as_path()).await?;
         for cask in casks {
             self.shell_executor
-                .execute(&format!("brew install --cask {}", cask))
+                .execute("brew", &["install", "--cask", cask.as_str()])
                 .await?;
         }
 
@@ -60,7 +63,7 @@ impl BrewService for BrewServiceImpl {
 
     async fn export(&self) -> Result<(), AppError> {
         let export_path = Path::new(RESOURCES_DIR).join(BREW_FORMULA_FILENAME);
-        let formulas = self.shell_executor.execute("brew leaves").await?;
+        let formulas = self.shell_executor.execute("brew", &["leaves"]).await?;
         self.fs_operations
             .write_lines(
                 export_path.as_path(),
@@ -72,7 +75,10 @@ impl BrewService for BrewServiceImpl {
             .await?;
 
         let export_path = Path::new(RESOURCES_DIR).join(BREW_CASK_FORMULA_FILENAME);
-        let casks = self.shell_executor.execute("brew list --cask").await?;
+        let casks = self
+            .shell_executor
+            .execute("brew", &["list", "--cask"])
+            .await?;
         self.fs_operations
             .write_lines(
                 export_path.as_path(),
@@ -97,15 +103,16 @@ mod tests {
     use mockall::mock;
     use mockall::predicate::eq;
     use std::path::Path;
+    use std::process::Output;
     use std::sync::Arc;
 
     mock! {
         ShellExecutor {}
         #[async_trait]
         impl ShellExecutor for ShellExecutor {
-            async fn execute(&self, command: &str) -> Result<String, AppError>;
-            async fn output(&self, command: &str) -> Result<std::process::Output, AppError>;
-            fn stderr(&self, output: &std::process::Output) -> String;
+            async fn execute(&self, command: &str, args: &[&str]) -> Result<String, AppError>;
+            async fn output(&self, command: &str, args: &[&str]) -> Result<Output, AppError>;
+            fn stderr(&self, output: &Output) -> String;
         }
     }
 
@@ -124,9 +131,9 @@ mod tests {
         let mock_fs = MockFileSystemOperations::new();
 
         mock_shell
-        .expect_execute()
-        .with(eq("/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""))
-        .returning(|_| Ok("Homebrew installed successfully".to_string()));
+            .expect_execute()
+            .with(eq("bash"), eq(vec!["-c", "\"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""]))
+            .returning(|_, _| Ok("Homebrew installed successfully".to_string()));
 
         let brew_service = BrewServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
 
@@ -145,7 +152,7 @@ mod tests {
 
         mock_shell
             .expect_execute()
-            .returning(|_| Ok("Package installed successfully".to_string()));
+            .returning(|_, _| Ok("Package installed successfully".to_string()));
 
         let brew_service = BrewServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
 
@@ -160,7 +167,7 @@ mod tests {
 
         mock_shell
             .expect_execute()
-            .returning(|_| Ok("package1\npackage2".to_string()));
+            .returning(|_, _| Ok("package1\npackage2".to_string()));
 
         mock_fs.expect_write_lines().returning(|_, _| Ok(()));
 
@@ -177,7 +184,7 @@ mod tests {
 
         mock_shell
             .expect_execute()
-            .returning(|_| Err(AppError::ShellExecution("Installation failed".to_string())));
+            .returning(|_, _| Err(AppError::ShellExecution("Installation failed".to_string())));
 
         let brew_service = BrewServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
 
@@ -205,7 +212,7 @@ mod tests {
 
         mock_shell
             .expect_execute()
-            .returning(|_| Ok("".to_string()));
+            .returning(|_, _| Ok("".to_string()));
         mock_fs.expect_write_lines().returning(|_, _| Ok(()));
 
         let brew_service = BrewServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs));
