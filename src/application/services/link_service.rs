@@ -241,6 +241,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_link_dotfiles_empty_source() {
+        let temp_dir = TempDir::new().unwrap();
+        let source = temp_dir.path().join("source");
+        let target = temp_dir.path().join("target");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::create_dir_all(&target).unwrap();
+
+        let mut mock_link_ops = MockLinkOperations::new();
+        let mut mock_path_ops = MockPathOperations::new();
+        let mut mock_prompt = MockPromptOperations::new();
+
+        mock_path_ops
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
+
+        mock_prompt.expect_confirm_action().returning(|_| Ok(true));
+
+        mock_link_ops
+            .expect_link_recursively()
+            .returning(|_, _| Ok(vec![]));
+
+        let link_service = LinkServiceImpl::new(
+            Arc::new(mock_link_ops),
+            Arc::new(mock_path_ops),
+            Arc::new(mock_prompt),
+        );
+
+        let result = link_service.link_dotfiles(&source, &target).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[tokio::test]
     async fn test_link_dotfiles_user_cancellation() {
         let mock_link_ops = MockLinkOperations::new();
         let mut mock_path_ops = MockPathOperations::new();
@@ -266,6 +299,36 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_materialize_dotfiles_empty_target() {
+        let temp_dir = TempDir::new().unwrap();
+        let target = temp_dir.path().join("target");
+
+        let mut mock_link_ops = MockLinkOperations::new();
+        let mut mock_path_ops = MockPathOperations::new();
+        let mut mock_prompt = MockPromptOperations::new();
+
+        mock_path_ops
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
+
+        mock_prompt.expect_confirm_action().returning(|_| Ok(true));
+
+        mock_link_ops
+            .expect_materialize_symlinks_recursively()
+            .returning(|_| Ok(vec![]));
+
+        let link_service = LinkServiceImpl::new(
+            Arc::new(mock_link_ops),
+            Arc::new(mock_path_ops),
+            Arc::new(mock_prompt),
+        );
+
+        let result = link_service.materialize_dotfiles(&target).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
     }
 
     #[tokio::test]
