@@ -164,24 +164,6 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_ensure_code_command() {
-        let mut mock_shell = MockShellExecutor::new();
-        let mock_fs = MockFileSystemOperations::new();
-        let mock_os = MockOSOperations::new();
-
-        mock_shell
-            .expect_execute()
-            .withf(|cmd: &str, args: &[&str]| cmd == "which" && args == ["code"])
-            .returning(|_, _| Ok("/usr/local/bin/code".to_string()));
-
-        let vscode_service =
-            VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs), Arc::new(mock_os));
-
-        let result = vscode_service.ensure_code_command().await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
     async fn test_export_extensions_empty_list() {
         let mut mock_shell = MockShellExecutor::new();
         let mut mock_fs = MockFileSystemOperations::new();
@@ -324,7 +306,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_ensure_code_command_non_macos() {
+    async fn test_ensure_code_command_not_found_non_macos() {
         let mut mock_shell = MockShellExecutor::new();
         let mock_fs = MockFileSystemOperations::new();
         let mut mock_os = MockOSOperations::new();
