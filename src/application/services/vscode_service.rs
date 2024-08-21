@@ -330,4 +330,45 @@ mod test {
             AppError::CodeCommandNotInstalled
         ));
     }
+
+    #[tokio::test]
+    async fn test_ensure_code_command_macos_install_success() {
+        let mut mock_shell = MockShellExecutor::new();
+        let mock_fs = MockFileSystemOperations::new();
+        let mut mock_os = MockOSOperations::new();
+
+        // 最初に `which code` コマンドが失敗することを期待
+        mock_shell
+            .expect_execute()
+            .withf(|cmd: &str, args: &[&str]| cmd == "which" && args == ["code"])
+            .returning(|_, _| Err(AppError::ShellExecution("Command not found".to_string())));
+
+        // OSがmacOSであることを期待
+        mock_os
+            .expect_get_os()
+            .returning(|| Ok("macos".to_string()));
+
+        // シンボリックリンクの作成が成功することを期待
+        mock_shell
+            .expect_execute()
+            .withf(|cmd: &str, args: &[&str]| {
+                cmd == "ln"
+                    && args
+                        == [
+                            "-s",
+                            "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
+                            "/usr/local/bin/code",
+                        ]
+            })
+            .returning(|_, _| Ok("Symlink created".to_string()));
+
+        let vscode_service =
+            VSCodeServiceImpl::new(Arc::new(mock_shell), Arc::new(mock_fs), Arc::new(mock_os));
+
+        // テスト実行
+        let result = vscode_service.ensure_code_command().await;
+
+        // 結果の検証
+        assert!(result.is_ok());
+    }
 }
