@@ -73,6 +73,79 @@ mod tests {
     }
 
     #[test]
+    fn test_execute_success() {
+        let rt = Runtime::new().unwrap();
+        let mut mock = MockSystemShellExecutor::new();
+        mock.expect_execute()
+            .withf(|cmd: &str, args: &[&str]| cmd == "echo" && args == ["Hello"])
+            .returning(|_, _| Ok("Hello\n".to_string()));
+
+        let result = rt.block_on(mock.execute("echo", &["Hello"]));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "Hello\n");
+    }
+
+    #[test]
+    fn test_execute_failure() {
+        let rt = Runtime::new().unwrap();
+        let mut mock = MockSystemShellExecutor::new();
+        mock.expect_execute()
+            .withf(|cmd: &str, args: &[&str]| cmd == "invalid_command" && args.is_empty())
+            .returning(|_, _| Err(AppError::ShellExecution("Command not found".to_string())));
+
+        let result = rt.block_on(mock.execute("invalid_command", &[]));
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AppError::ShellExecution(_)));
+    }
+
+    #[test]
+    fn test_output_success() {
+        let rt = Runtime::new().unwrap();
+        let mut mock = MockSystemShellExecutor::new();
+        mock.expect_output()
+            .withf(|cmd: &str, args: &[&str]| cmd == "echo" && args == ["Hello"])
+            .returning(|_, _| {
+                Ok(Output {
+                    status: ExitStatus::from_raw(0),
+                    stdout: b"Hello\n".to_vec(),
+                    stderr: vec![],
+                })
+            });
+
+        let result = rt.block_on(mock.output("echo", &["Hello"]));
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"Hello\n");
+    }
+
+    #[test]
+    fn test_output_failure() {
+        let rt = Runtime::new().unwrap();
+        let mut mock = MockSystemShellExecutor::new();
+        mock.expect_output()
+            .withf(|cmd: &str, args: &[&str]| cmd == "invalid_command" && args.is_empty())
+            .returning(|_, _| Err(AppError::ShellExecution("Command not found".to_string())));
+
+        let result = rt.block_on(mock.output("invalid_command", &[]));
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AppError::ShellExecution(_)));
+    }
+
+    #[test]
+    fn test_stderr() {
+        let executor = SystemShellExecutor::new();
+        let output = Output {
+            status: ExitStatus::from_raw(1),
+            stdout: vec![],
+            stderr: b"Error occurred".to_vec(),
+        };
+
+        let stderr = executor.stderr(&output);
+        assert_eq!(stderr, "Error occurred");
+    }
+
+    #[test]
     fn test_execute_success_with_mock() {
         let rt = Runtime::new().unwrap();
         let mut mock = MockSystemShellExecutor::new();
