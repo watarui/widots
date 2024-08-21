@@ -297,6 +297,40 @@ mod test {
     }
 
     #[tokio::test]
+    async fn test_load_empty_config() {
+        let temp_file = NamedTempFile::new().unwrap();
+        let config_path = temp_file.path().to_path_buf();
+        let target = PathBuf::from("/target");
+
+        let mock_link_ops = MockLinkOperations::new();
+        let mut mock_path_ops = MockPathOperations::new();
+        let mut mock_toml_parser = MockTomlOperations::new();
+        let mock_os_detector = MockOSOperations::new();
+        let mock_shell_executor = MockShellExecutor::new();
+        let mock_prompter = MockPromptOperations::new();
+
+        mock_path_ops
+            .expect_parse_path()
+            .returning(|path| Ok(path.to_path_buf()));
+
+        mock_toml_parser
+            .expect_parse()
+            .returning(|_| Ok(Config::default()));
+
+        let load_service = LoadServiceImpl::new(
+            Arc::new(mock_link_ops),
+            Arc::new(mock_path_ops),
+            Arc::new(mock_toml_parser),
+            Arc::new(mock_os_detector),
+            Arc::new(mock_shell_executor),
+            Arc::new(mock_prompter),
+        );
+
+        let result = load_service.load(&config_path, &target).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
     async fn test_load_with_invalid_config() {
         let mock_link_ops = MockLinkOperations::new();
         let mock_path_ops = MockPathOperations::new();
