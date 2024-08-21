@@ -39,7 +39,8 @@ fn internal_setup_logger(level: LevelFilter) -> Result<(), fern::InitError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use log::LevelFilter;
+    use chrono::Local;
+    use log::{Level, Record};
 
     #[test]
     fn test_setup_logger() {
@@ -48,5 +49,34 @@ mod tests {
 
         let result = setup_logger(LevelFilter::Debug);
         assert!(result.is_ok(), "Second logger setup failed");
+    }
+
+    #[test]
+    fn test_log_format() {
+        let colors = ColoredLevelConfig::new()
+            .error(Color::Red)
+            .warn(Color::Yellow)
+            .info(Color::Green)
+            .debug(Color::Blue)
+            .trace(Color::Magenta);
+
+        let record = Record::builder()
+            .args(format_args!("Test message"))
+            .level(Level::Info)
+            .target("test_target")
+            .build();
+
+        let formatted_log = format!(
+            "{}[{}][{}] {}",
+            Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
+            record.target(),
+            colors.color(record.level()),
+            record.args()
+        );
+
+        assert!(formatted_log.contains(&Local::now().format("[%Y-%m-%d][%H:%M:%S]").to_string()));
+        assert!(formatted_log.contains("[test_target]"));
+        assert!(formatted_log.contains("INFO"));
+        assert!(formatted_log.contains("Test message"));
     }
 }
